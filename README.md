@@ -1,4 +1,4 @@
-# [PyWeek 41] game by Knotty Kaa
+# [PyWeek 42] game by Knotty Kaa
 
 [Knotty Kaa entry](https://pyweek.org/e/KnottyKaa42/)
 
