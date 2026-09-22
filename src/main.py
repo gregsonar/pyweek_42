@@ -50,12 +50,14 @@ class Game:
             20: "assets/textures/walls/wall_window_4_up.png",
             'floor': "assets/textures/flats/floor_grate.png",
             'ceil': "assets/textures/flats/ceiling_panel.png",
+            'sky': "assets/textures/flats/sky.png",  # для режима SKY_MODE
         }
         textures = load_textures(texture_paths)
 
-        # Инициализация рендерера (нижний и верхний пояс стен)
+        # Инициализация рендерера (нижний и верхний пояс стен, режим верха)
         self.renderer = Renderer(textures, config.DEFAULT_MAP,
-                                 config.DEFAULT_MAP_UPPER)
+                                 config.DEFAULT_MAP_UPPER,
+                                 sky_mode=config.SKY_MODE)
 
         # Состояние игрока
         self.player = config.PLAYER_START.copy()

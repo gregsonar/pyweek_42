@@ -12,10 +12,11 @@ from .utils import clamp
 class Renderer:
     """Основной класс рендерера."""
 
-    def __init__(self, textures, game_map, upper_map=None):
+    def __init__(self, textures, game_map, upper_map=None, sky_mode=False):
         self.textures = textures
         self.map = np.array(game_map, dtype=int)
         self.map_h, self.map_w = self.map.shape
+        self.sky_mode = sky_mode  # True - небо параллаксом вместо потолка
         # Верхний пояс стен (z 1..2). Если не задан - совпадает с нижним.
         if upper_map is not None:
             self.upper_map = np.array(upper_map, dtype=int)
@@ -75,12 +76,37 @@ class Renderer:
             frame[:, y] = self.textures['floor'][tx, ty]
             self.z_buffer[:, y] = dist
 
-        # Потолок (выше горизонта)
+        # Верх: небо (параллакс) или потолок (проекция)
+        if self.sky_mode and 'sky' in self.textures:
+            self._render_sky(frame, pa)
+        else:
+            for y in range(0, mid):
+                dist = (ceil_gap * H) / (mid - y)
+                tx, ty = sample(dist)
+                frame[:, y] = self.textures['ceil'][tx, ty]
+                self.z_buffer[:, y] = dist
+
+    def _render_sky(self, frame, pa):
+        """
+        Отрисовка неба параллаксом: горизонталь текстуры берётся от угла взгляда
+        (панорамируется при повороте, не зависит от позиции игрока), вертикаль -
+        от строки экрана. Глубина = бесконечность, поэтому стены его перекрывают.
+        """
+        sky = self.textures['sky']
+        tw, th = sky.shape[0], sky.shape[1]
+        H = config.VIRT_HEIGHT
+        mid = H // 2
+
+        cols = np.arange(config.VIRT_WIDTH)
+        ray_ang = pa - config.FOV + (cols / config.VIRT_WIDTH) * 2 * config.FOV
+        # Горизонтальная координата текстуры по углу взгляда (тайлится)
+        frac = (ray_ang / (2 * math.pi) * config.SKY_TILES) % 1.0
+        su = (frac * tw).astype(int) % tw
+
         for y in range(0, mid):
-            dist = (ceil_gap * H) / (mid - y)
-            tx, ty = sample(dist)
-            frame[:, y] = self.textures['ceil'][tx, ty]
-            self.z_buffer[:, y] = dist
+            sv = int((y / mid) * th) % th
+            frame[:, y] = sky[su, sv]
+            self.z_buffer[:, y] = 99.0  # небо на бесконечности
 
     def cast_ray_dda(self, px, py, ray_angle, player_angle):
         """
