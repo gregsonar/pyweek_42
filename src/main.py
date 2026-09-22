@@ -9,7 +9,7 @@ from .utils import load_textures, load_sprite
 from .entities import Spark
 from .renderer import Renderer
 from .interactables import Interactable, InteractState, select_highlight
-from .placeholder_sprites import button_states, door_states
+from .placeholder_sprites import button_states
 
 
 class Game:
@@ -80,19 +80,21 @@ class Game:
         self.running = True
 
     def _build_interactables(self):
-        """Расставляет объекты на карте по умолчанию (заглушки для теста)."""
-        btn = button_states()
-        door = door_states()
+        """Расставляет объекты на карте по умолчанию."""
+        btn = button_states()  # кнопка пока на заглушке
+        door_closed = load_sprite("assets/textures/sprites/spr_door1_closed.png")
+        door_open = load_sprite("assets/textures/sprites/spr_door1_open.png")
         return [
             # Кнопка на северной грани перегородки: поверхность вдоль X, приподнята
             Interactable(5.0, 4.6,
                          [InteractState(btn[0]), InteractState(btn[1])],
                          angle=0.0, width=0.5,
                          height=0.5, y_offset=0.35, cyclic=True),
-            # Дверь в проёме перегородки: поверхность вдоль X (перекрывает проход по Y)
+            # Дверь в проёме перегородки: поверхность вдоль X (перекрывает проход
+            # по Y), в один тайл, ровно в нижнем поясе
             Interactable(6.5, 5.5,
-                         [InteractState(door[0], solid=True),
-                          InteractState(door[1], solid=False)],
+                         [InteractState(door_closed, solid=True),
+                          InteractState(door_open, solid=False)],
                          angle=0.0, width=1.0,
                          height=1.0, y_offset=0.0, cyclic=True),
         ]

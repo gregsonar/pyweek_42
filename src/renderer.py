@@ -145,14 +145,86 @@ class Renderer:
         frame[x, y0:y1] = texture[tx % config.TEX_SIZE, v]
         self.z_buffer[x, y0:y1] = dist
 
+    def _march_column(self, px, py, ray_angle, player_angle):
+        """
+        Проход лучом по клеткам карты для одного столбца.
+
+        Возвращает список сегментов от ближних к дальним. Сегмент:
+        {perp, raw, tx, full, upper_id, perp_far, [lower_id]}.
+        full=True - сплошная клетка (нижний пояс > 0): рисуется на всю высоту и
+        останавливает луч. full=False - только верхний пояс (перемычка/висящий
+        блок над проходом): рисуется как блок z 1..2 глубиной до perp_far, луч
+        идёт дальше - поэтому дальняя стена сверху остаётся видна ниже блока.
+        """
+        rdx, rdy = math.cos(ray_angle), math.sin(ray_angle)
+        mx, my = int(px), int(py)
+        ddx = abs(1 / rdx) if rdx != 0 else 1e30
+        ddy = abs(1 / rdy) if rdy != 0 else 1e30
+        sx, step_x = (-1, (px - mx) * ddx) if rdx < 0 else (1, (mx + 1 - px) * ddx)
+        sy, step_y = (-1, (py - my) * ddy) if rdy < 0 else (1, (my + 1 - py) * ddy)
+        cos_corr = math.cos(ray_angle - player_angle)
+
+        segments = []
+        pending = None  # сегмент-блок, которому ещё нужна дистанция выхода
+        while True:
+            if step_x < step_y:
+                raw = step_x
+                step_x += ddx
+                mx += sx
+                side = 0
+            else:
+                raw = step_y
+                step_y += ddy
+                my += sy
+                side = 1
+
+            if not (0 <= my < self.map_h and 0 <= mx < self.map_w):
+                break
+
+            # Текущая граница = выход из предыдущей клетки-блока
+            if pending is not None:
+                pending["perp_far"] = raw * cos_corr
+                pending = None
+
+            lower = int(self.map[my, mx])
+            upper = int(self.upper_map[my, mx])
+            if lower <= 0 and upper <= 0:
+                continue  # полностью открытая клетка - луч идёт дальше
+
+            perp = raw * cos_corr  # перпендикулярная дистанция (как в z-буфере)
+            if side == 0:
+                wall_hit = py + raw * rdy
+            else:
+                wall_hit = px + raw * rdx
+            tx = int((wall_hit % 1) * config.TEX_SIZE)
+
+            if lower > 0:  # сплошная стена на всю высоту - останавливает луч
+                segments.append({
+                    "perp": perp, "raw": raw, "tx": tx, "full": True,
+                    "lower_id": lower, "upper_id": upper if upper > 0 else lower,
+                    "perp_far": perp,
+                })
+                break
+
+            # только верхний пояс (перемычка/висящий блок) - луч идёт дальше
+            seg = {"perp": perp, "raw": raw, "tx": tx, "full": False,
+                   "upper_id": upper, "perp_far": perp}
+            segments.append(seg)
+            pending = seg
+
+        return segments
+
     def render_walls(self, frame, px, py, pa):
         """
         Отрисовка стен рейкастингом в два пояса по высоте.
 
-        Луч (DDA) находит клетку стены; далее столбец рисуется на всю высоту
-        потолка и делится на нижний пояс (z 0..1, текстура из self.map) и
-        верхний (z 1..2, текстура из self.upper_map). Экранная координата
-        мировой высоты z: mid + (EYE_HEIGHT - z) * L, где L - пикселей на юнит.
+        Для каждого столбца _march_column собирает сегменты (перемычки/блоки
+        верхнего пояса + завершающая сплошная стена). Сегменты рисуются от
+        дальних к ближним (алгоритм художника): сплошная стена - оба пояса;
+        перемычка/блок - верхний пояс как блок z 1..2 глубиной до perp_far
+        (передняя грань + низ), поэтому снизу он не просвечивает, а дальняя
+        стена сверху остаётся видна ниже блока. Экранная координата мировой
+        высоты z: mid + (EYE_HEIGHT - z) * L, где L - пикселей на юнит.
         """
         mid = config.VIRT_HEIGHT // 2
         eye = config.EYE_HEIGHT
@@ -160,38 +232,40 @@ class Renderer:
 
         for x in range(config.VIRT_WIDTH):
             ray_angle = pa - config.FOV + (x / config.VIRT_WIDTH) * 2 * config.FOV
-            result = self.cast_ray_dda(px, py, ray_angle, pa)
-
-            if result is None:
-                continue
-
-            mx, my, dist, raw_dist, side = result
             rdx, rdy = math.cos(ray_angle), math.sin(ray_angle)
+            segments = self._march_column(px, py, ray_angle, pa)
 
-            # Пикселей на 1 юнит высоты
-            unit = config.VIRT_HEIGHT / (dist + 0.0001)
+            for seg in reversed(segments):  # дальние -> ближние
+                d = seg["perp"]
+                unit = config.VIRT_HEIGHT / (d + 0.0001)
+                y_floor = mid + (eye - 0.0) * unit
+                y_seam = mid + (eye - 1.0) * unit
+                y_ceil = mid + (eye - 2.0) * unit
+                upper_tex = self.textures.get(seg["upper_id"])
 
-            # Координата текстуры по ширине — по истинному расстоянию вдоль луча
-            if side == 0:
-                wall_hit = py + raw_dist * rdy
-            else:
-                wall_hit = px + raw_dist * rdx
-            tx = int((wall_hit % 1) * config.TEX_SIZE)
+                # верхний пояс (z 1..2), передняя грань на ближней дистанции
+                self._draw_wall_band(frame, x, y_ceil, y_seam, upper_tex,
+                                     seg["tx"], d)
 
-            lower_tex = self.textures.get(int(self.map[my, mx]))
-            upper_tex = self.textures.get(int(self.upper_map[my, mx]), lower_tex)
+                if seg["full"]:
+                    # нижний пояс (z 0..1)
+                    self._draw_wall_band(frame, x, y_seam, y_floor,
+                                         self.textures.get(seg["lower_id"]),
+                                         seg["tx"], d)
+                else:
+                    # низ блока: до z=1 у дальней грани клетки (не просвечивает)
+                    d_far = seg["perp_far"]
+                    if d_far > d:
+                        unit_far = config.VIRT_HEIGHT / (d_far + 0.0001)
+                        y_seam_far = mid + (eye - 1.0) * unit_far
+                        self._draw_wall_band(frame, x, y_seam, y_seam_far,
+                                             upper_tex, seg["tx"], d_far)
 
-            # Экранные границы поясов: пол z=0, шов z=1, потолок z=2
-            y_floor = mid + (eye - 0.0) * unit
-            y_seam = mid + (eye - 1.0) * unit
-            y_ceil = mid + (eye - 2.0) * unit
-
-            self._draw_wall_band(frame, x, y_seam, y_floor, lower_tex, tx, dist)
-            self._draw_wall_band(frame, x, y_ceil, y_seam, upper_tex, tx, dist)
-
-            # Точка попадания в центр экрана (для искр)
-            if x == config.VIRT_WIDTH // 2:
-                hit_info = (px + raw_dist * rdx, py + raw_dist * rdy, dist)
+            # Точка попадания в центр экрана (для искр) - ближайшая сплошная стена
+            if x == config.VIRT_WIDTH // 2 and segments and segments[-1]["full"]:
+                seg = segments[-1]
+                hit_info = (px + seg["raw"] * rdx, py + seg["raw"] * rdy,
+                            seg["perp"])
 
         return hit_info
 
@@ -263,7 +337,9 @@ class Renderer:
                 texel = sprite[u, v_idx]  # (bh, 4)
 
                 z_col = self.z_buffer[col, y0:y1]
-                vis = (texel[:, 3] > 8) & (perp < z_col)
+                alpha = texel[:, 3] / 255.0
+                # рисуем там, где есть непрозрачность и объект ближе стены
+                vis = (alpha > 0.03) & (perp < z_col)
                 if not vis.any():
                     continue
 
@@ -271,9 +347,15 @@ class Renderer:
                 if mult != 1.0:
                     rgb = np.clip(rgb * mult, 0, 255)
 
+                # Альфа-смешивание с уже отрисованным фоном (полупрозрачность)
                 frame_col = frame[col, y0:y1, :]
-                frame_col[vis] = rgb[vis]
-                z_col[vis] = perp
+                a = alpha[vis][:, np.newaxis]
+                frame_col[vis] = rgb[vis] * a + frame_col[vis] * (1.0 - a)
+
+                # В z-буфер пишем только достаточно непрозрачные пиксели, чтобы
+                # полупрозрачные (свечение) не перекрывали глубину за собой
+                opaque = vis & (alpha > 0.5)
+                z_col[opaque] = perp
 
     def apply_post_processing(self, frame, focus, brightness, saturation_mult):
         """
