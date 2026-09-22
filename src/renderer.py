@@ -253,13 +253,15 @@ class Renderer:
                                          self.textures.get(seg["lower_id"]),
                                          seg["tx"], d)
                 else:
-                    # низ блока: до z=1 у дальней грани клетки (не просвечивает)
+                    # низ блока: до z=1 у дальней грани клетки (не просвечивает).
+                    # Рисуется текстурой потолка - низ блока это "потолок" прохода
                     d_far = seg["perp_far"]
                     if d_far > d:
                         unit_far = config.VIRT_HEIGHT / (d_far + 0.0001)
                         y_seam_far = mid + (eye - 1.0) * unit_far
                         self._draw_wall_band(frame, x, y_seam, y_seam_far,
-                                             upper_tex, seg["tx"], d_far)
+                                             self.textures.get('ceil'),
+                                             seg["tx"], d_far)
 
             # Точка попадания в центр экрана (для искр) - ближайшая сплошная стена
             if x == config.VIRT_WIDTH // 2 and segments and segments[-1]["full"]:
