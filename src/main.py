@@ -95,6 +95,7 @@ class Game:
         self.hp = config.PLAYER_MAX_HP
         self._trap_contact_cell = None
         self._trap_contact_ticks = 0
+        self._stun_ticks = 0  # оставшийся стан игрока при уроне (тики)
 
         # Буфер кадра переиспользуется между кадрами (без переаллокации)
         self._frame = np.zeros(
@@ -196,6 +197,11 @@ class Game:
                 return True
         return False
 
+    @property
+    def player_can_act(self):
+        """Может ли игрок двигаться/поворачиваться/взаимодействовать/жать F."""
+        return self.time_ctrl.player_running and self._stun_ticks <= 0
+
     def handle_input(self, dt):
         """Обработка ввода: события и клавиши. dt — время кадра в секундах."""
         # Флаг использования сбрасывается каждый кадр и выставляется по нажатию
@@ -209,7 +215,11 @@ class Game:
             if event.type == pg.KEYDOWN and event.key == pg.K_e:
                 self.interact_pressed = True
             # Способность заёма времени: остановка мира (тоггл)
-            if event.type == pg.KEYDOWN and event.key == pg.K_f:
+            if (
+                event.type == pg.KEYDOWN
+                and event.key == pg.K_f
+                and self.player_can_act
+            ):
                 self.time_ctrl.toggle_freeze()
 
         # Управление фокусом (ЛКМ)
@@ -224,9 +234,9 @@ class Game:
         self.rays_intensity += (target_rays - self.rays_intensity) * 0.1
 
         # Поворот камеры мышью (get_rel вызываем всегда, чтобы дельта не копилась;
-        # при заморозке игрока поворот не применяем)
+        # при заморозке/стане игрока поворот не применяем)
         rel_x, _ = pg.mouse.get_rel()
-        if self.time_ctrl.player_running:
+        if self.player_can_act:
             self.player["angle"] += rel_x * config.MOUSE_SENSITIVITY
 
         # Перемещение клавишами
@@ -247,8 +257,8 @@ class Game:
             dx -= sin_a
             dy += cos_a
 
-        # При заморозке игрока (возврат долга) движение отключено
-        if not self.time_ctrl.player_running:
+        # При заморозке (возврат долга) или стане (урон) движение отключено
+        if not self.player_can_act:
             dx = dy = 0.0
 
         # Коллизия с картой (упрощённая) и с твёрдыми объектами
@@ -390,7 +400,7 @@ class Game:
         if (
             self.interact_pressed
             and self.highlighted is not None
-            and self.time_ctrl.player_running
+            and self.player_can_act
         ):
             self.highlighted.use()
 
@@ -429,6 +439,8 @@ class Game:
     def _damage(self, amount):
         """Нанести урон игроку; при HP<=0 - проигрыш и рестарт уровня."""
         self.hp -= amount
+        # Кратко станим игрока, чтобы урон ощущался (движение/ввод отключены)
+        self._stun_ticks = config.PLAYER_STUN_TICKS
         print("player hit by trap, hp=%d" % self.hp, flush=True)
         if self.hp <= 0:
             print("player died - level restart", flush=True)
@@ -441,6 +453,7 @@ class Game:
         self.hp = config.PLAYER_MAX_HP
         self._trap_contact_cell = None
         self._trap_contact_ticks = 0
+        self._stun_ticks = 0
         for trap in self.traps:
             trap.reset()
         for obj in self.interactables:
@@ -461,6 +474,8 @@ class Game:
             # Шаги логики времени (фиксированный тик): механика заёма/возврата и
             # мир (ловушки/урон) - при world_running
             for _ in range(self.timer.update(dt)):
+                if self._stun_ticks > 0:
+                    self._stun_ticks -= 1
                 self.time_ctrl.step()
                 if self.time_ctrl.world_running:
                     self.world_step()
