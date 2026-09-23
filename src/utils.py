@@ -2,28 +2,39 @@
 """Вспомогательные функции."""
 
 import os
+import sys
 import math
 import pygame as pg
 import numpy as np
 from . import config
 
 
+def _warn(msg):
+    """Предупреждение в консоль (stderr) - чтобы отлавливать пропавшие ресурсы."""
+    print("[ресурсы] " + msg, file=sys.stderr)
+
+
 def load_texture(path=None, size=None):
     """
     Загружает текстуру и возвращает её как numpy-массив float32.
-    Если путь не указан или файл не найден — возвращает серую заглушку.
+    Если путь не указан или файл не найден — возвращает серую заглушку
+    и печатает предупреждение в консоль.
     """
     if size is None:
         size = (config.TEX_SIZE, config.TEX_SIZE)
 
-    if path and os.path.exists(path):
-        try:
-            img = pg.image.load(path).convert()
-            surf = pg.Surface(size)
-            surf.blit(img, (0, 0))
-            return pg.surfarray.array3d(surf).astype(np.float32)
-        except Exception:
-            pass  # fallback to placeholder
+    if path:
+        if os.path.exists(path):
+            try:
+                img = pg.image.load(path).convert()
+                surf = pg.Surface(size)
+                surf.blit(img, (0, 0))
+                return pg.surfarray.array3d(surf).astype(np.float32)
+            except Exception as exc:
+                _warn("не удалось загрузить текстуру %s: %s -> серая заглушка"
+                      % (path, exc))
+        else:
+            _warn("текстура не найдена: %s -> серая заглушка" % path)
 
     # Заглушка: серая текстура
     surf = pg.Surface(size)
@@ -40,15 +51,35 @@ def load_textures(texture_map):
     return {key: load_texture(path) for key, path in texture_map.items()}
 
 
-def load_sprite(path):
+def load_sprite(path, size=None):
     """
     Загружает спрайт с альфа-каналом.
     :return: numpy-массив RGBA float32 формы (w, h, 4), индексация [x, y].
+    Если файл не найден или не читается — возвращает заметную маджента-заглушку
+    (непрозрачную) и печатает предупреждение, а не падает.
     """
-    img = pg.image.load(path).convert_alpha()
-    rgb = pg.surfarray.array3d(img).astype(np.float32)
-    alpha = pg.surfarray.array_alpha(img).astype(np.float32)
-    return np.dstack([rgb, alpha])
+    if size is None:
+        size = (config.TEX_SIZE, config.TEX_SIZE)
+
+    if path and os.path.exists(path):
+        try:
+            img = pg.image.load(path).convert_alpha()
+            rgb = pg.surfarray.array3d(img).astype(np.float32)
+            alpha = pg.surfarray.array_alpha(img).astype(np.float32)
+            return np.dstack([rgb, alpha])
+        except Exception as exc:
+            _warn("не удалось загрузить спрайт %s: %s -> маджента-заглушка"
+                  % (path, exc))
+    else:
+        _warn("спрайт не найден: %s -> маджента-заглушка" % path)
+
+    # Заглушка: заметный непрозрачный маджента-квадрат
+    w, h = size
+    placeholder = np.zeros((w, h, 4), dtype=np.float32)
+    placeholder[:, :, 0] = 255.0  # R
+    placeholder[:, :, 2] = 255.0  # B
+    placeholder[:, :, 3] = 255.0  # непрозрачный
+    return placeholder
 
 
 def clamp(value, min_val, max_val):
