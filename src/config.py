@@ -2,6 +2,7 @@
 """Глобальные настройки рендерера."""
 
 import math
+
 from .level import Level
 
 # Разрешения
@@ -47,6 +48,13 @@ MOUSE_SENSITIVITY = 0.003
 MOVE_SPEED = 2.1  # единиц карты в секунду
 MAX_DT = 0.05  # максимальный шаг кадра (сек): защита от туннелирования при лаге
 
+# Время и способность заёма времени (Borrowed Time)
+TICK_RATE = 60  # логических тиков в секунду (фиксированный шаг логики)
+MAX_TICKS_PER_FRAME = 5  # максимум тиков за кадр (защита от спирали смерти при лаге)
+FREEZE_BUDGET_TICKS = 180  # бюджет заморозки мира (тики; 180 = 3 с при 60 тик/с)
+REPAY_INTERVAL_MIN = 300  # мин. задержка до возврата долга (тики; 5 с)
+REPAY_INTERVAL_MAX = 720  # макс. задержка до возврата долга (тики; 12 с)
+
 # Взаимодействие с объектами
 INTERACT_RADIUS = 2.5  # максимальная дистанция взаимодействия (клетки)
 OBJECT_BLOCK_RADIUS = 0.35  # радиус блокировки прохода твёрдым объектом
@@ -83,17 +91,17 @@ PLAYER_START = {"x": 6.5, "y": 4.2, "angle": -math.pi / 2}
 
 # Верхний пояс стен (z 1..2) - отдельный массив id текстур той же формы.
 def _build_upper_map(lower):
-    upper = [[1 if v > 0 else 0 for v in row] for row in lower]
-    for x in range(2, 7):  # над окном (id 11..15) - мох
-        upper[0][x] = 3
+    upper = [[21 if v > 0 else 0 for v in row] for row in lower]
+    # for x in range(2, 7):  # над окном (id 11..15) - мох
+    #     upper[0][x] = 21
 
     upper[0][2] = 16
     upper[0][3] = 17
     upper[0][4] = 18
     upper[0][5] = 19
     upper[0][6] = 20
-    upper[5][6] = 1
-    upper[3][5] = 1  # ТЕСТ: висящий блок на верхнем поясе (низ пустой)
+    upper[5][6] = 21
+    upper[3][5] = 21  # ТЕСТ: висящий блок на верхнем поясе (низ пустой)
     upper[0][8] = 2  # над консолью - бетон_02
     upper[0][9] = 2
     return upper
@@ -107,5 +115,5 @@ DEFAULT_LEVEL = Level(
     lower_map=DEFAULT_MAP,
     upper_map=DEFAULT_MAP_UPPER,
     player_start=PLAYER_START,
-    sky_mode=True,  # небо (параллакс); поставь False для потолка
+    sky_mode=False,  # небо (параллакс); поставь False для потолка
 )

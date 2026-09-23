@@ -1,15 +1,18 @@
 # src/main.py
 """Основной цикл игры: ввод, обновление, отрисовка."""
 
-import pygame as pg
-import numpy as np
 import random
+
+import numpy as np
+import pygame as pg
+
 from . import config
-from .utils import load_textures, load_sprite
 from .entities import Spark
-from .renderer import Renderer
 from .interactables import Interactable, InteractState, select_highlight
 from .placeholder_sprites import button_states
+from .renderer import Renderer
+from .timing import TimeController, Timer
+from .utils import load_sprite, load_textures
 
 
 class Game:
@@ -24,7 +27,9 @@ class Game:
 
         # Виртуальный буфер (низкое разрешение для ретро-эффекта)
         self.virt_surf = pg.Surface((config.VIRT_WIDTH, config.VIRT_HEIGHT))
-        self.rays_surf = pg.Surface((config.VIRT_WIDTH, config.VIRT_HEIGHT), pg.SRCALPHA)
+        self.rays_surf = pg.Surface(
+            (config.VIRT_WIDTH, config.VIRT_HEIGHT), pg.SRCALPHA
+        )
 
         # Загрузка ресурсов (id стен 1..15 -> новые тайлы)
         texture_paths = {
@@ -48,9 +53,10 @@ class Game:
             18: "assets/textures/walls/wall_window_2_up.png",
             19: "assets/textures/walls/wall_window_3_up.png",
             20: "assets/textures/walls/wall_window_4_up.png",
-            'floor': "assets/textures/flats/floor_grate.png",
-            'ceil': "assets/textures/flats/ceiling_panel.png",
-            'sky': "assets/textures/flats/sky.png",  # для режима SKY_MODE
+            21: "assets/textures/walls/wall_concrete_01_up.png",
+            "floor": "assets/textures/flats/floor_grate.png",
+            "ceil": "assets/textures/flats/ceiling_panel.png",
+            "sky": "assets/textures/flats/sky.png",  # для режима SKY_MODE
         }
         textures = load_textures(texture_paths)
 
@@ -58,8 +64,9 @@ class Game:
         level = config.DEFAULT_LEVEL
 
         # Инициализация рендерера (нижний и верхний пояс стен, режим верха)
-        self.renderer = Renderer(textures, level.lower_map, level.upper_map,
-                                 sky_mode=level.sky_mode)
+        self.renderer = Renderer(
+            textures, level.lower_map, level.upper_map, sky_mode=level.sky_mode
+        )
 
         # Состояние игрока
         self.player = level.player_start.copy()
@@ -74,15 +81,20 @@ class Game:
 
         # Интерактивные объекты (пока с заглушками-спрайтами)
         self.interactables = self._build_interactables()
-        self.highlighted = None       # текущий подсвеченный объект
-        self.interact_pressed = False # флаг нажатия клавиши использования
+        self.highlighted = None  # текущий подсвеченный объект
+        self.interact_pressed = False  # флаг нажатия клавиши использования
 
         # Неинтерактивный декор (плоские спрайты, не участвуют в подсветке/E)
         self.props = self._build_props()
 
         # Буфер кадра переиспользуется между кадрами (без переаллокации)
-        self._frame = np.zeros((config.VIRT_WIDTH, config.VIRT_HEIGHT, 3),
-                               dtype=np.float32)
+        self._frame = np.zeros(
+            (config.VIRT_WIDTH, config.VIRT_HEIGHT, 3), dtype=np.float32
+        )
+
+        # Время: фиксированный шаг логики + механика заёма/возврата времени
+        self.timer = Timer()
+        self.time_ctrl = TimeController(self.timer)
 
         self.clock = pg.time.Clock()
         self.running = True
@@ -94,17 +106,31 @@ class Game:
         door_open = load_sprite("assets/textures/sprites/spr_door1_open.png")
         return [
             # Кнопка на северной грани перегородки: поверхность вдоль X, приподнята
-            Interactable(5.0, 4.6,
-                         [InteractState(btn[0]), InteractState(btn[1])],
-                         angle=0.0, width=0.5,
-                         height=0.5, y_offset=0.35, cyclic=True),
+            Interactable(
+                5.0,
+                4.6,
+                [InteractState(btn[0]), InteractState(btn[1])],
+                angle=0.0,
+                width=0.5,
+                height=0.5,
+                y_offset=0.35,
+                cyclic=True,
+            ),
             # Дверь в проёме перегородки: поверхность вдоль X (перекрывает проход
             # по Y), в один тайл, ровно в нижнем поясе
-            Interactable(6.5, 5.5,
-                         [InteractState(door_closed, solid=True),
-                          InteractState(door_open, solid=False)],
-                         angle=0.0, width=1.0,
-                         height=1.0, y_offset=0.0, cyclic=True),
+            Interactable(
+                6.5,
+                5.5,
+                [
+                    InteractState(door_closed, solid=True),
+                    InteractState(door_open, solid=False),
+                ],
+                angle=0.0,
+                width=1.0,
+                height=1.0,
+                y_offset=0.0,
+                cyclic=True,
+            ),
         ]
 
     def _build_props(self):
@@ -114,9 +140,15 @@ class Game:
         def prop(name, real_w, real_h, x, y, y_offset=0.0):
             side = max(real_w, real_h)
             spr = load_sprite(base + name)
-            return Interactable(x, y, [InteractState(spr)],
-                                angle=0.0, width=side, height=side,
-                                y_offset=y_offset)
+            return Interactable(
+                x,
+                y,
+                [InteractState(spr)],
+                angle=0.0,
+                width=side,
+                height=side,
+                y_offset=y_offset,
+            )
 
         return [
             # Северная половина
@@ -134,8 +166,10 @@ class Game:
     def _blocked_by_object(self, nx, ny):
         """Есть ли рядом с точкой (nx, ny) твёрдый объект, мешающий проходу."""
         for obj in self.interactables:
-            if obj.solid and \
-                    np.hypot(obj.x - nx, obj.y - ny) < config.OBJECT_BLOCK_RADIUS:
+            if (
+                obj.solid
+                and np.hypot(obj.x - nx, obj.y - ny) < config.OBJECT_BLOCK_RADIUS
+            ):
                 return True
         return False
 
@@ -151,6 +185,9 @@ class Game:
             # Использование объекта - по нажатию (одно срабатывание на нажатие)
             if event.type == pg.KEYDOWN and event.key == pg.K_e:
                 self.interact_pressed = True
+            # Способность заёма времени: остановка мира (тоггл)
+            if event.type == pg.KEYDOWN and event.key == pg.K_f:
+                self.time_ctrl.toggle_freeze()
 
         # Управление фокусом (ЛКМ)
         is_firing = pg.mouse.get_pressed()[0]
@@ -163,32 +200,56 @@ class Game:
         self.brightness += (target_bright - self.brightness) * 0.1
         self.rays_intensity += (target_rays - self.rays_intensity) * 0.1
 
-        # Поворот камеры мышью
+        # Поворот камеры мышью (get_rel вызываем всегда, чтобы дельта не копилась;
+        # при заморозке игрока поворот не применяем)
         rel_x, _ = pg.mouse.get_rel()
-        self.player['angle'] += rel_x * config.MOUSE_SENSITIVITY
+        if self.time_ctrl.player_running:
+            self.player["angle"] += rel_x * config.MOUSE_SENSITIVITY
 
         # Перемещение клавишами
         keys = pg.key.get_pressed()
         dx, dy = 0, 0
-        sin_a, cos_a = np.sin(self.player['angle']), np.cos(self.player['angle'])
+        sin_a, cos_a = np.sin(self.player["angle"]), np.cos(self.player["angle"])
 
-        if keys[pg.K_w]: dx += cos_a; dy += sin_a
-        if keys[pg.K_s]: dx -= cos_a; dy -= sin_a
-        if keys[pg.K_a]: dx += sin_a; dy -= cos_a
-        if keys[pg.K_d]: dx -= sin_a; dy += cos_a
+        if keys[pg.K_w]:
+            dx += cos_a
+            dy += sin_a
+        if keys[pg.K_s]:
+            dx -= cos_a
+            dy -= sin_a
+        if keys[pg.K_a]:
+            dx += sin_a
+            dy -= cos_a
+        if keys[pg.K_d]:
+            dx -= sin_a
+            dy += cos_a
+
+        # При заморозке игрока (возврат долга) движение отключено
+        if not self.time_ctrl.player_running:
+            dx = dy = 0.0
 
         # Коллизия с картой (упрощённая) и с твёрдыми объектами
-        next_x, next_y = self.player['x'] + dx * 0.3, self.player['y'] + dy * 0.3
-        if 0 <= int(next_y) < self.renderer.map_h and \
-                0 <= int(self.player['x'] + dx * 0.3) < self.renderer.map_w and \
-                self.renderer.map[int(self.player['y']), int(self.player['x'] + dx * 0.3)] == 0 and \
-                not self._blocked_by_object(next_x, self.player['y']):
-            self.player['x'] += dx * config.MOVE_SPEED * dt
-        if 0 <= int(self.player['y'] + dy * 0.3) < self.renderer.map_h and \
-                0 <= int(next_x) < self.renderer.map_w and \
-                self.renderer.map[int(self.player['y'] + dy * 0.3), int(self.player['x'])] == 0 and \
-                not self._blocked_by_object(self.player['x'], next_y):
-            self.player['y'] += dy * config.MOVE_SPEED * dt
+        next_x, next_y = self.player["x"] + dx * 0.3, self.player["y"] + dy * 0.3
+        if (
+            0 <= int(next_y) < self.renderer.map_h
+            and 0 <= int(self.player["x"] + dx * 0.3) < self.renderer.map_w
+            and self.renderer.map[
+                int(self.player["y"]), int(self.player["x"] + dx * 0.3)
+            ]
+            == 0
+            and not self._blocked_by_object(next_x, self.player["y"])
+        ):
+            self.player["x"] += dx * config.MOVE_SPEED * dt
+        if (
+            0 <= int(self.player["y"] + dy * 0.3) < self.renderer.map_h
+            and 0 <= int(next_x) < self.renderer.map_w
+            and self.renderer.map[
+                int(self.player["y"] + dy * 0.3), int(self.player["x"])
+            ]
+            == 0
+            and not self._blocked_by_object(self.player["x"], next_y)
+        ):
+            self.player["y"] += dy * config.MOVE_SPEED * dt
 
         return is_firing
 
@@ -199,29 +260,48 @@ class Game:
             if random.random() > 0.4:
                 for spark in self.sparks:
                     if not spark.is_active():
-                        spark.spawn(hit_info[0], hit_info[1], self.player['angle'])
+                        spark.spawn(hit_info[0], hit_info[1], self.player["angle"])
                         break
 
         # Обновление и отрисовка
         for spark in self.sparks:
             if spark.update():
-                dx_s = spark.x - self.player['x']
-                dy_s = spark.y - self.player['y']
-                dist_s = dx_s * np.cos(self.player['angle']) + dy_s * np.sin(self.player['angle'])
+                dx_s = spark.x - self.player["x"]
+                dy_s = spark.y - self.player["y"]
+                dist_s = dx_s * np.cos(self.player["angle"]) + dy_s * np.sin(
+                    self.player["angle"]
+                )
 
                 if dist_s > 0.1:
                     # Проекция на экран
-                    screen_x = int(((dx_s * -np.sin(self.player['angle']) +
-                                     dy_s * np.cos(self.player['angle'])) / dist_s / 1.1 + 0.5) * config.VIRT_WIDTH)
-                    screen_y = int(config.VIRT_HEIGHT / 2 + (spark.z / dist_s * config.VIRT_HEIGHT))
+                    screen_x = int(
+                        (
+                            (
+                                dx_s * -np.sin(self.player["angle"])
+                                + dy_s * np.cos(self.player["angle"])
+                            )
+                            / dist_s
+                            / 1.1
+                            + 0.5
+                        )
+                        * config.VIRT_WIDTH
+                    )
+                    screen_y = int(
+                        config.VIRT_HEIGHT / 2 + (spark.z / dist_s * config.VIRT_HEIGHT)
+                    )
 
                     # Отрисовка, если искра ближе, чем стена
-                    if (0 <= screen_x < config.VIRT_WIDTH and
-                            0 <= screen_y < config.VIRT_HEIGHT and
-                            dist_s < self.renderer.z_buffer[screen_x, screen_y]):
+                    if (
+                        0 <= screen_x < config.VIRT_WIDTH
+                        and 0 <= screen_y < config.VIRT_HEIGHT
+                        and dist_s < self.renderer.z_buffer[screen_x, screen_y]
+                    ):
                         size = max(1, int(3 / dist_s))
-                        pg.draw.rect(self.virt_surf, (255, 200, 50),
-                                     (screen_x, screen_y, size, size))
+                        pg.draw.rect(
+                            self.virt_surf,
+                            (255, 200, 50),
+                            (screen_x, screen_y, size, size),
+                        )
 
     def render(self, is_firing):
         """Полный цикл рендеринга кадра."""
@@ -231,28 +311,28 @@ class Game:
         self.renderer.begin_frame()
 
         # 1. Пол и потолок
-        self.renderer.render_floor_ceiling(frame,
-                                           self.player['x'], self.player['y'],
-                                           self.player['angle'])
+        self.renderer.render_floor_ceiling(
+            frame, self.player["x"], self.player["y"], self.player["angle"]
+        )
 
         # 2. Стены
-        hit_info = self.renderer.render_walls(frame,
-                                              self.player['x'], self.player['y'],
-                                              self.player['angle'])
+        hit_info = self.renderer.render_walls(
+            frame, self.player["x"], self.player["y"], self.player["angle"]
+        )
 
         # 3. Объекты и декор (плоские спрайты) - до пост-обработки
-        self.renderer.render_sprites(frame,
-                                     self.player['x'], self.player['y'],
-                                     self.player['angle'],
-                                     self.interactables + self.props,
-                                     self.highlighted)
+        self.renderer.render_sprites(
+            frame,
+            self.player["x"],
+            self.player["y"],
+            self.player["angle"],
+            self.interactables + self.props,
+            self.highlighted,
+        )
 
         # 4. Пост-обработка
         final = self.renderer.apply_post_processing(
-            frame,
-            focus=self.focus,
-            brightness=self.brightness,
-            saturation_mult=1.0
+            frame, focus=self.focus, brightness=self.brightness, saturation_mult=1.0
         )
         pg.surfarray.blit_array(self.virt_surf, final)
 
@@ -264,19 +344,26 @@ class Game:
         self.update_particles(is_firing, hit_info)
 
         # 7. Масштабирование на полный экран
-        self.screen.blit(pg.transform.scale(self.virt_surf,
-                                            (config.WIN_WIDTH, config.WIN_HEIGHT)),
-                         (0, 0))
+        self.screen.blit(
+            pg.transform.scale(self.virt_surf, (config.WIN_WIDTH, config.WIN_HEIGHT)),
+            (0, 0),
+        )
         pg.display.flip()
 
     def update_interaction(self):
         """Выбор подсвеченного объекта и его использование по нажатию E."""
         self.highlighted = select_highlight(
             self.interactables,
-            self.player['x'], self.player['y'], self.player['angle'],
+            self.player["x"],
+            self.player["y"],
+            self.player["angle"],
             self.renderer.map,
         )
-        if self.interact_pressed and self.highlighted is not None:
+        if (
+            self.interact_pressed
+            and self.highlighted is not None
+            and self.time_ctrl.player_running
+        ):
             self.highlighted.use()
 
     def run(self):
@@ -286,6 +373,10 @@ class Game:
             # проскочить сквозь стену (см. коллизию в handle_input)
             dt = min(self.clock.tick(config.FPS) / 1000.0, config.MAX_DT)
             is_firing = self.handle_input(dt)
+            # Шаги логики времени (фиксированный тик): механика заёма/возврата;
+            # когда появятся враги/ловушки - их шаги здесь при world_running
+            for _ in range(self.timer.update(dt)):
+                self.time_ctrl.step()
             self.update_interaction()
             self.render(is_firing)
 
