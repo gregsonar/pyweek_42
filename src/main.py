@@ -78,6 +78,10 @@ class Game:
         # Неинтерактивный декор (плоские спрайты, не участвуют в подсветке/E)
         self.props = self._build_props()
 
+        # Буфер кадра переиспользуется между кадрами (без переаллокации)
+        self._frame = np.zeros((config.VIRT_WIDTH, config.VIRT_HEIGHT, 3),
+                               dtype=np.float32)
+
         self.clock = pg.time.Clock()
         self.running = True
 
@@ -219,8 +223,9 @@ class Game:
 
     def render(self, is_firing):
         """Полный цикл рендеринга кадра."""
-        # Буферы
-        frame = np.zeros((config.VIRT_WIDTH, config.VIRT_HEIGHT, 3), dtype=np.float32)
+        # Буферы (переиспользуем кадровый буфер, пол/потолок перезапишут всё)
+        frame = self._frame
+        frame.fill(0.0)
         self.renderer.begin_frame()
 
         # 1. Пол и потолок

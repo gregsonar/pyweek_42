@@ -27,6 +27,12 @@ class Renderer:
         self.z_buffer = np.full((config.VIRT_WIDTH, config.VIRT_HEIGHT),
                                 99.0, dtype=np.float32)
 
+        # Кеш координатных сеток для пост-обработки (константы по разрешению)
+        _xs = np.linspace(-0.5, 0.5, config.VIRT_WIDTH)
+        _ys = np.linspace(-0.5, 0.5, config.VIRT_HEIGHT)
+        xm, ym = np.meshgrid(_xs, _ys, indexing='ij')
+        self._r2 = (xm ** 2 + ym ** 2).astype(np.float32)  # квадрат радиуса
+
         # God rays параметры
         self._init_god_rays()
 
@@ -390,26 +396,29 @@ class Renderer:
         Пост-обработка: виньетка, глубина резкости, насыщенность.
         :return: frame как uint8 для отрисовки
         """
-        # Координатные сетки
-        xs = np.linspace(-0.5, 0.5, config.VIRT_WIDTH)
-        ys = np.linspace(-0.5, 0.5, config.VIRT_HEIGHT)
-        xm, ym = np.meshgrid(xs, ys, indexing='ij')
+        # Квадрат радиуса от центра - кешированная константа (см. __init__)
+        r2 = self._r2
 
         # Виньетка + затенение по глубине
-        radial = np.exp(-focus * (xm ** 2 + ym ** 2))
+        radial = np.exp(-focus * r2)
         depth_mask = np.exp(-config.DEPTH_FALLOFF * self.z_buffer)
         light_mask = radial * depth_mask * brightness
 
         # Насыщенность: центр — цветной, края — ч/б
-        gray = np.stack([np.dot(frame, [0.299, 0.587, 0.114])] * 3, axis=-1)
         sat_map = np.clip(
-            np.exp(-(focus / 15.0) * (xm ** 2 + ym ** 2)) +
-            (1.0 - (focus - 12) / 250.0),
+            np.exp(-(focus / 15.0) * r2) + (1.0 - (focus - 12) / 250.0),
             0, 1
         )[..., np.newaxis]
 
-        # Финальная композиция
-        blended = frame * sat_map + gray * (1 - sat_map)
+        # Композиция цвета: ч/б подмешивается только там, где sat_map < 1.
+        # Когда насыщенность всюду ~1 (обычный режим, не "сварка") - пропускаем
+        # расчёт ч/б целиком.
+        if sat_map.min() >= 0.999:
+            blended = frame
+        else:
+            gray = np.stack([np.dot(frame, [0.299, 0.587, 0.114])] * 3, axis=-1)
+            blended = frame * sat_map + gray * (1 - sat_map)
+
         result = (blended * (light_mask[..., np.newaxis] + config.AMBIENT_FLOOR)).clip(0, 255)
 
         return result.astype(np.uint8)
