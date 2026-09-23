@@ -2,6 +2,7 @@
 """Глобальные настройки рендерера."""
 
 import math
+from .level import Level
 
 # Разрешения
 VIRT_WIDTH = 320
@@ -21,9 +22,8 @@ FPS = 30
 CEILING_HEIGHT = 2.0
 EYE_HEIGHT = 0.5
 
-# Верх уровня: False - потолок (текстура ceil, проекцией), True - небо
-# (одна текстура параллаксом над головой, зависит только от угла взгляда).
-SKY_MODE = True
+# Режим верха (потолок или небо) задаётся на уровне - см. Level.sky_mode и
+# DEFAULT_LEVEL ниже. Здесь только тюнинг рендера неба.
 SKY_TILES = 3.0  # сколько раз текстура неба повторяется на 360 градусов
 
 # Физика частиц
@@ -100,3 +100,12 @@ def _build_upper_map(lower):
 
 
 DEFAULT_MAP_UPPER = _build_upper_map(DEFAULT_MAP)
+
+
+# Уровень по умолчанию: карты + старт игрока + режим верха (потолок/небо).
+DEFAULT_LEVEL = Level(
+    lower_map=DEFAULT_MAP,
+    upper_map=DEFAULT_MAP_UPPER,
+    player_start=PLAYER_START,
+    sky_mode=True,  # небо (параллакс); поставь False для потолка
+)

@@ -54,13 +54,15 @@ class Game:
         }
         textures = load_textures(texture_paths)
 
+        # Данные уровня (карты, старт, режим верха) в одном объекте
+        level = config.DEFAULT_LEVEL
+
         # Инициализация рендерера (нижний и верхний пояс стен, режим верха)
-        self.renderer = Renderer(textures, config.DEFAULT_MAP,
-                                 config.DEFAULT_MAP_UPPER,
-                                 sky_mode=config.SKY_MODE)
+        self.renderer = Renderer(textures, level.lower_map, level.upper_map,
+                                 sky_mode=level.sky_mode)
 
         # Состояние игрока
-        self.player = config.PLAYER_START.copy()
+        self.player = level.player_start.copy()
 
         # Параметры эффектов
         self.focus = config.VIGNETTE  # фокусное расстояние / виньетка
