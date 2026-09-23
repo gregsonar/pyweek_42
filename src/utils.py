@@ -87,6 +87,19 @@ def clamp(value, min_val, max_val):
     return max(min_val, min(value, max_val))
 
 
+def desaturate(tex, amount=0.6, dim=1.0):
+    """
+    Обесцвечивает RGB-текстуру (смешивает с ч/б) и опционально затемняет.
+    amount 0..1 - доля ч/б; dim 0..1 - множитель яркости. Возвращает копию.
+    Индексация и число каналов сохраняются (RGB или RGBA - трогает только RGB).
+    """
+    out = tex.copy()
+    gray = np.dot(tex[..., :3], [0.299, 0.587, 0.114])
+    gray3 = np.stack([gray] * 3, axis=-1)
+    out[..., :3] = (tex[..., :3] * (1.0 - amount) + gray3 * amount) * dim
+    return out
+
+
 def camera_space(px, py, pa, ox, oy):
     """
     Переводит мировую точку (ox, oy) в систему координат камеры.

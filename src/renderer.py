@@ -49,13 +49,17 @@ class Renderer:
         """Сброс z-буфера перед рендерингом нового кадра."""
         self.z_buffer.fill(99.0)
 
-    def render_floor_ceiling(self, frame, px, py, pa):
+    def render_floor_ceiling(self, frame, px, py, pa, floor_tiles=None):
         """
         Отрисовка пола и потолка методом проекции.
 
         Глаз на высоте EYE_HEIGHT над полом, потолок на CEILING_HEIGHT. Так как
         глаз не в центре, пол и потолок несимметричны и считаются раздельно:
         пол - на глубину eye/(y-горизонт), потолок - (CEILING-eye)/(горизонт-y).
+
+        floor_tiles - опциональный dict {(строка, столбец): текстура} для подмены
+        тайла пола в конкретных клетках (ловушки); текстура сажается в клетку по
+        её локальным координатам.
         """
         rx0 = math.cos(pa - config.FOV)
         ry0 = math.sin(pa - config.FOV)
@@ -75,12 +79,27 @@ class Renderer:
             ty = (cy * 63).astype(int) % config.TEX_SIZE
             return tx, ty
 
-        # Пол (ниже горизонта)
+        # Пол (ниже горизонта). Текстура тайлится РОВНО по клеткам (локальные
+        # координаты клетки), чтобы ловушки точно совпадали с квадратом пола.
+        floor_tex = self.textures['floor']
+        tex_n = config.TEX_SIZE
         for y in range(mid, H):
             dist = (eye * H) / (y - mid + 0.0001)
-            tx, ty = sample(dist)
-            frame[:, y] = self.textures['floor'][tx, ty]
+            cx = px + dist * (rx0 + xs * (rx1 - rx0))
+            cy = py + dist * (ry0 + xs * (ry1 - ry0))
+            ix = cx.astype(int)
+            iy = cy.astype(int)
+            tx = np.clip(((cx - ix) * tex_n).astype(int), 0, tex_n - 1)
+            ty = np.clip(((cy - iy) * tex_n).astype(int), 0, tex_n - 1)
+            frame[:, y] = floor_tex[tx, ty]
             self.z_buffer[:, y] = dist
+
+            # Подмена тайла пола под ловушками (те же клеточные координаты)
+            if floor_tiles:
+                for (r, c), tile_tex in floor_tiles.items():
+                    mask = (iy == r) & (ix == c)
+                    if mask.any():
+                        frame[mask, y] = tile_tex[tx[mask], ty[mask]]
 
         # Верх: небо (параллакс) или потолок (проекция)
         if self.sky_mode and 'sky' in self.textures:

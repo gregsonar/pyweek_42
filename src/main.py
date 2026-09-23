@@ -12,7 +12,8 @@ from .interactables import Interactable, InteractState, select_highlight
 from .placeholder_sprites import button_states
 from .renderer import Renderer
 from .timing import TimeController, Timer
-from .utils import load_sprite, load_textures
+from .traps import Trap
+from .utils import desaturate, load_sprite, load_texture, load_textures
 
 
 class Game:
@@ -86,6 +87,14 @@ class Game:
 
         # Неинтерактивный декор (плоские спрайты, не участвуют в подсветке/E)
         self.props = self._build_props()
+
+        # Ловушки (объекты мира; циклят по мировым тикам)
+        self.traps = self._build_traps()
+
+        # Здоровье игрока и состояние касания активной ловушки
+        self.hp = config.PLAYER_MAX_HP
+        self._trap_contact_cell = None
+        self._trap_contact_ticks = 0
 
         # Буфер кадра переиспользуется между кадрами (без переаллокации)
         self._frame = np.zeros(
@@ -161,6 +170,20 @@ class Game:
             prop("spr_crate_b.png", 1.00, 1.05, 5.0, 8.5),
             prop("spr_shrooms.png", 0.55, 0.34, 7.0, 8.7),
             prop("spr_overlay.png", 0.85, 0.52, 9.5, 7.5, y_offset=1.0),
+        ]
+
+    def _build_traps(self):
+        """Демо-ловушки. Пассивная текстура - временно обесцвеченная активная."""
+        tex_on = load_texture("assets/textures/flats/floor_trap_enabled.png")
+        tex_off = desaturate(
+            tex_on, amount=config.TRAP_OFF_DESATURATE, dim=config.TRAP_OFF_DIM
+        )
+        on, off = config.TRAP_ON_TICKS, config.TRAP_OFF_TICKS
+        return [
+            # На пути от старта на север (игрок наступит)
+            Trap(6, 3, tex_on, tex_off, on, off, start_active=True),
+            # Южная половина, другой ритм и противофаза
+            Trap(3, 8, tex_on, tex_off, 60, 120, start_active=False),
         ]
 
     def _blocked_by_object(self, nx, ny):
@@ -310,9 +333,14 @@ class Game:
         frame.fill(0.0)
         self.renderer.begin_frame()
 
-        # 1. Пол и потолок
+        # 1. Пол и потолок (с подменой тайлов под ловушками)
+        floor_tiles = {trap.cell: trap.texture for trap in self.traps}
         self.renderer.render_floor_ceiling(
-            frame, self.player["x"], self.player["y"], self.player["angle"]
+            frame,
+            self.player["x"],
+            self.player["y"],
+            self.player["angle"],
+            floor_tiles=floor_tiles,
         )
 
         # 2. Стены
@@ -366,6 +394,63 @@ class Game:
         ):
             self.highlighted.use()
 
+    def world_step(self):
+        """Один мировой тик: циклы ловушек и урон (вызывается при world_running)."""
+        for trap in self.traps:
+            trap.step()
+        self._apply_trap_damage()
+
+    def _active_trap_at(self, cell):
+        """Активная ловушка в клетке (строка, столбец) или None."""
+        for trap in self.traps:
+            if trap.active and trap.cell == cell:
+                return trap
+        return None
+
+    def _apply_trap_damage(self):
+        """Урон: 1 при касании работающей ловушки, далее 1/сек, пока стоишь."""
+        cell = (int(self.player["y"]), int(self.player["x"]))
+        if self._active_trap_at(cell) is None:
+            # ушёл с ловушки или она выключилась - урон не копится
+            self._trap_contact_cell = None
+            self._trap_contact_ticks = 0
+            return
+        if self._trap_contact_cell != cell:
+            # новое касание работающей ловушки - урон сразу
+            self._trap_contact_cell = cell
+            self._trap_contact_ticks = 0
+            self._damage(1)
+        else:
+            self._trap_contact_ticks += 1
+            if self._trap_contact_ticks >= config.TRAP_DAMAGE_PERIOD:
+                self._trap_contact_ticks -= config.TRAP_DAMAGE_PERIOD
+                self._damage(1)
+
+    def _damage(self, amount):
+        """Нанести урон игроку; при HP<=0 - проигрыш и рестарт уровня."""
+        self.hp -= amount
+        print("player hit by trap, hp=%d" % self.hp, flush=True)
+        if self.hp <= 0:
+            print("player died - level restart", flush=True)
+            self.reset_level()
+
+    def reset_level(self):
+        """Полный мягкий сброс уровня (при проигрыше)."""
+        level = config.DEFAULT_LEVEL
+        self.player = level.player_start.copy()
+        self.hp = config.PLAYER_MAX_HP
+        self._trap_contact_cell = None
+        self._trap_contact_ticks = 0
+        for trap in self.traps:
+            trap.reset()
+        for obj in self.interactables:
+            obj.state = 0
+        self.highlighted = None
+        self.interact_pressed = False
+        # Сброс времени (бюджет/долг/состояние)
+        self.timer = Timer()
+        self.time_ctrl = TimeController(self.timer)
+
     def run(self):
         """Главный цикл игры."""
         while self.running:
@@ -373,10 +458,12 @@ class Game:
             # проскочить сквозь стену (см. коллизию в handle_input)
             dt = min(self.clock.tick(config.FPS) / 1000.0, config.MAX_DT)
             is_firing = self.handle_input(dt)
-            # Шаги логики времени (фиксированный тик): механика заёма/возврата;
-            # когда появятся враги/ловушки - их шаги здесь при world_running
+            # Шаги логики времени (фиксированный тик): механика заёма/возврата и
+            # мир (ловушки/урон) - при world_running
             for _ in range(self.timer.update(dt)):
                 self.time_ctrl.step()
+                if self.time_ctrl.world_running:
+                    self.world_step()
             self.update_interaction()
             self.render(is_firing)
 
