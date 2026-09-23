@@ -280,7 +280,9 @@ class Game:
     def run(self):
         """Главный цикл игры."""
         while self.running:
-            dt = self.clock.tick(config.FPS) / 1000.0
+            # Ограничиваем шаг кадра сверху: при лаге dt не должен позволять
+            # проскочить сквозь стену (см. коллизию в handle_input)
+            dt = min(self.clock.tick(config.FPS) / 1000.0, config.MAX_DT)
             is_firing = self.handle_input(dt)
             self.update_interaction()
             self.render(is_firing)
