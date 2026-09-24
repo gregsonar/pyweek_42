@@ -3,6 +3,7 @@
 
 from . import config
 from .confirm import ConfirmScene
+from .credits import CreditsScene
 from .fonts import load_font
 from .i18n import tr
 from .main import GameplayScene
@@ -31,10 +32,16 @@ class MainMenuScene(Scene):
                 ),
                 MenuItem(self._language_label, self._toggle_language),
                 MenuItem(
+                    lambda: tr("menu_credits", self.app.language), self._credits
+                ),
+                MenuItem(
                     lambda: tr("menu_quit", self.app.language), self.app.quit
                 ),
             ]
         )
+
+    def _credits(self):
+        self.app.push_scene(CreditsScene(self.app))
 
     def _language_label(self):
         name = tr("lang_%s" % self.app.language, self.app.language)

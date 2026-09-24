@@ -128,6 +128,15 @@ class GameplayScene(Scene):
         """Сброс накопленной дельты мыши, чтобы камера не прыгнула при входе."""
         pg.mouse.get_rel()
 
+    def _win(self):
+        """Завершение уровня -> экран победы (с фейдом).
+
+        ВРЕМЕННО вызывается по F10, пока в уровне нет реальной цели/выхода.
+        """
+        from .victory import VictoryScene
+
+        self.app.fade_to(VictoryScene(self.app))
+
     def _show_level_intro(self):
         """Показать вводное сообщение уровня, если оно задано в i18n."""
         key = "level_%d_msg" % self.level_number
@@ -245,6 +254,8 @@ class GameplayScene(Scene):
                 self.hud.set_language(self.app.language)
             elif event.key == pg.K_f and self.player_can_act:
                 self.time_ctrl.toggle_freeze()
+            elif event.key == pg.K_F10:
+                self._win()  # ВРЕМЕННО: имитация победы (пока нет цели уровня)
 
     def _update_input(self, dt):
         """Непрерывный ввод: ЛКМ (фокус), поворот мышью, движение. -> is_firing."""

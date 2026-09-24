@@ -26,6 +26,12 @@ STRINGS = {
         "confirm_new_game": "Start over? Progress will be lost.",
         "confirm_yes": "Yes",
         "confirm_no": "No",
+        "menu_credits": "Credits",
+        "credits_title": "Credits",
+        "credits_back": "Back",
+        "victory_title": "Level Complete",
+        "victory_menu": "Main Menu",
+        "victory_credits": "Credits",
     },
     "ru": {
         "level": "Уровень {n}",
@@ -46,6 +52,12 @@ STRINGS = {
         "confirm_new_game": "Начать заново? Прогресс будет потерян.",
         "confirm_yes": "Да",
         "confirm_no": "Нет",
+        "menu_credits": "Титры",
+        "credits_title": "Титры",
+        "credits_back": "Назад",
+        "victory_title": "Уровень пройден",
+        "victory_menu": "В главное меню",
+        "victory_credits": "Титры",
     },
 }
 
