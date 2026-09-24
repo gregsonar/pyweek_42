@@ -6,8 +6,11 @@ import random
 import numpy as np
 import pygame as pg
 
+from src.i18n import has, tr
+
 from . import config
 from .entities import Spark
+from .hud import Hud
 from .interactables import Interactable, InteractState, select_highlight
 from .placeholder_sprites import button_states
 from .renderer import Renderer
@@ -55,11 +58,18 @@ class Game:
             19: "assets/textures/walls/wall_window_3_up.png",
             20: "assets/textures/walls/wall_window_4_up.png",
             21: "assets/textures/walls/wall_concrete_01_up.png",
+            22: "assets/textures/walls/wall_concrete_02_up.png",
             "floor": "assets/textures/flats/floor_grate.png",
+            "floor2": "assets/textures/flats/floor_grate_2.png",  # 2-й вариант пола
             "ceil": "assets/textures/flats/ceiling_panel.png",
+            "ceil2": "assets/textures/flats/ceiling_panel-2.png",  # 2-й вариант потолка
             "sky": "assets/textures/flats/sky.png",  # для режима SKY_MODE
         }
         textures = load_textures(texture_paths)
+
+        # Локализация интерфейса и HUD (создаётся после pg.init - шрифты готовы)
+        self.language = config.LANGUAGE
+        self.hud = Hud(self.language)
 
         # Данные уровня (карты, старт, режим верха) в одном объекте
         level = config.DEFAULT_LEVEL
@@ -106,8 +116,23 @@ class Game:
         self.timer = Timer()
         self.time_ctrl = TimeController(self.timer)
 
+        # Обратный отсчёт времени попытки (в тиках; идёт только при world_running,
+        # то есть останавливается, когда игрок останавливает время)
+        self.level_number = level.number
+        self._time_limit_ticks = round(level.time_limit * config.TICK_RATE)
+        self.time_left_ticks = self._time_limit_ticks
+
         self.clock = pg.time.Clock()
         self.running = True
+
+        # Вводное сообщение уровня (только при первом входе)
+        self._show_level_intro()
+
+    def _show_level_intro(self):
+        """Показать вводное сообщение уровня, если оно задано в i18n."""
+        key = "level_%d_msg" % self.level_number
+        if has(key, self.language):
+            self.hud.set_message(key, seconds=config.LEVEL_MSG_SECONDS)
 
     def _build_interactables(self):
         """Расставляет объекты на карте по умолчанию."""
@@ -214,12 +239,12 @@ class Game:
             # Использование объекта - по нажатию (одно срабатывание на нажатие)
             if event.type == pg.KEYDOWN and event.key == pg.K_e:
                 self.interact_pressed = True
+            # Переключение языка интерфейса (en/ru)
+            if event.type == pg.KEYDOWN and event.key == pg.K_l:
+                self.language = "ru" if self.language == "en" else "en"
+                self.hud.set_language(self.language)
             # Способность заёма времени: остановка мира (тоггл)
-            if (
-                event.type == pg.KEYDOWN
-                and event.key == pg.K_f
-                and self.player_can_act
-            ):
+            if event.type == pg.KEYDOWN and event.key == pg.K_f and self.player_can_act:
                 self.time_ctrl.toggle_freeze()
 
         # Управление фокусом (ЛКМ)
@@ -386,6 +411,18 @@ class Game:
             pg.transform.scale(self.virt_surf, (config.WIN_WIDTH, config.WIN_HEIGHT)),
             (0, 0),
         )
+
+        # 8. HUD поверх масштабированной сцены (в разрешении окна)
+        self.hud.draw(
+            self.screen,
+            time_left=self.time_left_ticks / config.TICK_RATE,
+            hp=self.hp,
+            max_hp=config.PLAYER_MAX_HP,
+            level_number=self.level_number,
+            world_frozen=not self.time_ctrl.world_running,
+            budget_fraction=self.time_ctrl.budget_fraction,
+        )
+
         pg.display.flip()
 
     def update_interaction(self):
@@ -405,10 +442,24 @@ class Game:
             self.highlighted.use()
 
     def world_step(self):
-        """Один мировой тик: циклы ловушек и урон (вызывается при world_running)."""
+        """Один мировой тик: обратный отсчёт и циклы ловушек.
+
+        Вызывается только при world_running, поэтому отсчёт времени попытки и
+        переключение ловушек вкл/выкл стоят, пока игрок держит мир остановленным.
+        Урон от активных ловушек применяется отдельно (см. _apply_trap_damage в
+        главном цикле) - каждый тик, чтобы включённая на момент остановки времени
+        ловушка оставалась опасной и при замороженном мире.
+        """
+        # Обратный отсчёт времени попытки; при исчерпании - рестарт
+        self.time_left_ticks -= 1
+        if self.time_left_ticks <= 0:
+            self.time_left_ticks = 0
+            print("time is up - level restart", flush=True)
+            self.reset_level()
+            self.hud.set_message("time_up", seconds=2.0)
+            return
         for trap in self.traps:
             trap.step()
-        self._apply_trap_damage()
 
     def _active_trap_at(self, cell):
         """Активная ловушка в клетке (строка, столбец) или None."""
@@ -441,6 +492,8 @@ class Game:
         self.hp -= amount
         # Кратко станим игрока, чтобы урон ощущался (движение/ввод отключены)
         self._stun_ticks = config.PLAYER_STUN_TICKS
+        # Полноэкранная вспышка урона в HUD
+        self.hud.flash_damage()
         print("player hit by trap, hp=%d" % self.hp, flush=True)
         if self.hp <= 0:
             print("player died - level restart", flush=True)
@@ -463,6 +516,11 @@ class Game:
         # Сброс времени (бюджет/долг/состояние)
         self.timer = Timer()
         self.time_ctrl = TimeController(self.timer)
+        # Сброс обратного отсчёта попытки и состояния HUD
+        self.time_left_ticks = self._time_limit_ticks
+        self.hud.reset()
+        # TODO: при смерти/рестарте показывать отдельное сообщение (не вводное) -
+        # реализуем позже; вводное сообщение уровня здесь намеренно не повторяем
 
     def run(self):
         """Главный цикл игры."""
@@ -479,6 +537,10 @@ class Game:
                 self.time_ctrl.step()
                 if self.time_ctrl.world_running:
                     self.world_step()
+                # Урон от активных ловушек - каждый тик, независимо от остановки
+                # мира: включённая ловушка опасна и в замороженном состоянии
+                self._apply_trap_damage()
+            self.hud.update(dt, player_frozen=not self.time_ctrl.player_running)
             self.update_interaction()
             self.render(is_firing)
 

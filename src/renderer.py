@@ -23,6 +23,20 @@ class Renderer:
         else:
             self.upper_map = self.map.copy()
 
+        # Два варианта тайлов пола/потолка + пер-клеточный выбор варианта.
+        # Выбор фиксируется здесь (при создании уровня), поэтому стабилен между
+        # кадрами. Значение config.*_VARIANT_SECOND - доля второго тайла.
+        self._floor_texes = [
+            self.textures['floor'],
+            self.textures.get('floor2', self.textures['floor']),
+        ]
+        self._ceil_texes = [
+            self.textures['ceil'],
+            self.textures.get('ceil2', self.textures['ceil']),
+        ]
+        self._floor_variant = self._build_variant_map(config.FLOOR_VARIANT_SECOND)
+        self._ceil_variant = self._build_variant_map(config.CEIL_VARIANT_SECOND)
+
         # Буферы
         self.z_buffer = np.full((config.VIRT_WIDTH, config.VIRT_HEIGHT),
                                 99.0, dtype=np.float32)
@@ -44,6 +58,15 @@ class Renderer:
                            for _ in range(config.GOD_RAY_COUNT)]
         self.ray_mults = [random.uniform(0.5, 1.0)
                           for _ in range(config.GOD_RAY_COUNT)]
+
+    def _build_variant_map(self, second_share):
+        """Пер-клеточная карта варианта тайла (0 или 1).
+
+        1 (второй вариант) выпадает с вероятностью second_share, независимо для
+        каждой клетки. Форма совпадает с картой уровня.
+        """
+        rnd = np.random.random((self.map_h, self.map_w))
+        return (rnd < second_share).astype(np.int8)
 
     def begin_frame(self):
         """Сброс z-буфера перед рендерингом нового кадра."""
@@ -72,17 +95,14 @@ class Renderer:
         eye = config.EYE_HEIGHT
         ceil_gap = config.CEILING_HEIGHT - eye  # высота потолка над глазом
 
-        def sample(dist):
-            cx = px + dist * (rx0 + xs * (rx1 - rx0))
-            cy = py + dist * (ry0 + xs * (ry1 - ry0))
-            tx = (cx * 63).astype(int) % config.TEX_SIZE
-            ty = (cy * 63).astype(int) % config.TEX_SIZE
-            return tx, ty
+        tex_n = config.TEX_SIZE
+        mh, mw = self.map_h, self.map_w
 
         # Пол (ниже горизонта). Текстура тайлится РОВНО по клеткам (локальные
         # координаты клетки), чтобы ловушки точно совпадали с квадратом пола.
-        floor_tex = self.textures['floor']
-        tex_n = config.TEX_SIZE
+        # Вариант тайла (floor / floor2) выбирается по клетке из _floor_variant.
+        floor_a, floor_b = self._floor_texes
+        floor_variant = self._floor_variant
         for y in range(mid, H):
             dist = (eye * H) / (y - mid + 0.0001)
             cx = px + dist * (rx0 + xs * (rx1 - rx0))
@@ -91,7 +111,11 @@ class Renderer:
             iy = cy.astype(int)
             tx = np.clip(((cx - ix) * tex_n).astype(int), 0, tex_n - 1)
             ty = np.clip(((cy - iy) * tex_n).astype(int), 0, tex_n - 1)
-            frame[:, y] = floor_tex[tx, ty]
+            # Выбор варианта по клетке (индексы клеток зажаты в границы карты)
+            sel = floor_variant[np.clip(iy, 0, mh - 1), np.clip(ix, 0, mw - 1)]
+            frame[:, y] = np.where(
+                sel[:, None].astype(bool), floor_b[tx, ty], floor_a[tx, ty]
+            )
             self.z_buffer[:, y] = dist
 
             # Подмена тайла пола под ловушками (те же клеточные координаты)
@@ -105,10 +129,23 @@ class Renderer:
         if self.sky_mode and 'sky' in self.textures:
             self._render_sky(frame, pa)
         else:
+            # Потолок тайлится глобально (как раньше); вариант тайла (ceil /
+            # ceil2) выбирается по клетке из _ceil_variant.
+            ceil_a, ceil_b = self._ceil_texes
+            ceil_variant = self._ceil_variant
             for y in range(0, mid):
                 dist = (ceil_gap * H) / (mid - y)
-                tx, ty = sample(dist)
-                frame[:, y] = self.textures['ceil'][tx, ty]
+                cx = px + dist * (rx0 + xs * (rx1 - rx0))
+                cy = py + dist * (ry0 + xs * (ry1 - ry0))
+                tx = (cx * 63).astype(int) % tex_n
+                ty = (cy * 63).astype(int) % tex_n
+                sel = ceil_variant[
+                    np.clip(cy.astype(int), 0, mh - 1),
+                    np.clip(cx.astype(int), 0, mw - 1),
+                ]
+                frame[:, y] = np.where(
+                    sel[:, None].astype(bool), ceil_b[tx, ty], ceil_a[tx, ty]
+                )
                 self.z_buffer[:, y] = dist
 
     def _render_sky(self, frame, pa):
