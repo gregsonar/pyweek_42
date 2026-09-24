@@ -235,7 +235,9 @@ class GameplayScene(Scene):
             if event.type != pg.KEYDOWN:
                 continue
             if event.key == pg.K_ESCAPE:
-                self.app.quit()  # шаг 1: Esc пока выходит (дальше - пауза)
+                from .pause import PauseScene  # ленивый импорт - разрыв цикла
+
+                self.app.push_scene(PauseScene(self.app))
             elif event.key == pg.K_e:
                 self.interact_pressed = True
             elif event.key == pg.K_l:
@@ -421,8 +423,9 @@ class GameplayScene(Scene):
         self.renderer.draw_god_rays(self.rays_surf, self.rays_intensity)
         self.virt_surf.blit(self.rays_surf, (0, 0))
 
-        # 6. Частицы
-        self.update_particles(self._is_firing, hit_info)
+        # 6. Частицы (только когда игра активна - под паузой заморожены)
+        if self.app.scene is self:
+            self.update_particles(self._is_firing, hit_info)
 
         # 7. Масштабирование на полный экран
         screen.blit(
@@ -540,7 +543,10 @@ class GameplayScene(Scene):
 
 
 def run_engine():
-    """Точка входа: запустить приложение с игровой сценой."""
+    """Точка входа: запустить приложение с главного меню."""
+    # Ленивый импорт разрывает цикл main <-> menu (menu импортирует GameplayScene)
+    from .menu import MainMenuScene
+
     app = App()
-    app.push_scene(GameplayScene(app))
+    app.push_scene(MainMenuScene(app))
     app.run()

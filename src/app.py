@@ -60,6 +60,9 @@ class App:
         grab = bool(getattr(scene, "wants_mouse_grab", False))
         pg.mouse.set_visible(not grab)
         pg.event.set_grab(grab)
+        # Сбросить накопленную дельту мыши, чтобы камера не прыгнула при смене
+        # режима (вход в игру/выход из паузы)
+        pg.mouse.get_rel()
 
     # --- главный цикл ---
     def run(self):
