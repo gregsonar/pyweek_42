@@ -84,19 +84,23 @@ class Renderer:
         тайла пола в конкретных клетках (ловушки); текстура сажается в клетку по
         её локальным координатам.
         """
-        rx0 = math.cos(pa - config.FOV)
-        ry0 = math.sin(pa - config.FOV)
-        rx1 = math.cos(pa + config.FOV)
-        ry1 = math.sin(pa + config.FOV)
-
         H = config.VIRT_HEIGHT
         mid = H // 2
-        xs = np.linspace(0, 1, config.VIRT_WIDTH)
         eye = config.EYE_HEIGHT
         ceil_gap = config.CEILING_HEIGHT - eye  # высота потолка над глазом
-
         tex_n = config.TEX_SIZE
         mh, mw = self.map_h, self.map_w
+
+        # Проекция пола/потолка согласована со стенами (равноугольная): на каждый
+        # столбец берём НАСТОЯЩИЙ единичный луч под тем же углом, что и стены
+        # (pa - FOV + x/W * 2FOV), а дистанцию вдоль луча получаем из
+        # перпендикулярной через 1/cos(theta - pa) - та же коррекция "рыбьего
+        # глаза", что и у стен. Иначе пол/потолок "плывут" относительно стен.
+        xs = np.arange(config.VIRT_WIDTH) / config.VIRT_WIDTH
+        theta = pa - config.FOV + xs * (2.0 * config.FOV)
+        dirx = np.cos(theta)
+        diry = np.sin(theta)
+        inv_cos = 1.0 / np.cos(theta - pa)  # perp -> дистанция вдоль луча столбца
 
         # Пол (ниже горизонта). Текстура тайлится РОВНО по клеткам (локальные
         # координаты клетки), чтобы ловушки точно совпадали с квадратом пола.
@@ -104,9 +108,10 @@ class Renderer:
         floor_a, floor_b = self._floor_texes
         floor_variant = self._floor_variant
         for y in range(mid, H):
-            dist = (eye * H) / (y - mid + 0.0001)
-            cx = px + dist * (rx0 + xs * (rx1 - rx0))
-            cy = py + dist * (ry0 + xs * (ry1 - ry0))
+            perp = (eye * H) / (y - mid + 0.0001)  # перпендикулярная дистанция
+            r = perp * inv_cos                     # дистанция вдоль луча столбца
+            cx = px + r * dirx
+            cy = py + r * diry
             ix = cx.astype(int)
             iy = cy.astype(int)
             tx = np.clip(((cx - ix) * tex_n).astype(int), 0, tex_n - 1)
@@ -116,12 +121,12 @@ class Renderer:
             frame[:, y] = np.where(
                 sel[:, None].astype(bool), floor_b[tx, ty], floor_a[tx, ty]
             )
-            self.z_buffer[:, y] = dist
+            self.z_buffer[:, y] = perp
 
             # Подмена тайла пола под ловушками (те же клеточные координаты)
             if floor_tiles:
-                for (r, c), tile_tex in floor_tiles.items():
-                    mask = (iy == r) & (ix == c)
+                for (cell_r, cell_c), tile_tex in floor_tiles.items():
+                    mask = (iy == cell_r) & (ix == cell_c)
                     if mask.any():
                         frame[mask, y] = tile_tex[tx[mask], ty[mask]]
 
@@ -134,9 +139,10 @@ class Renderer:
             ceil_a, ceil_b = self._ceil_texes
             ceil_variant = self._ceil_variant
             for y in range(0, mid):
-                dist = (ceil_gap * H) / (mid - y)
-                cx = px + dist * (rx0 + xs * (rx1 - rx0))
-                cy = py + dist * (ry0 + xs * (ry1 - ry0))
+                perp = (ceil_gap * H) / (mid - y + 0.0001)
+                r = perp * inv_cos
+                cx = px + r * dirx
+                cy = py + r * diry
                 tx = (cx * 63).astype(int) % tex_n
                 ty = (cy * 63).astype(int) % tex_n
                 sel = ceil_variant[
@@ -146,7 +152,7 @@ class Renderer:
                 frame[:, y] = np.where(
                     sel[:, None].astype(bool), ceil_b[tx, ty], ceil_a[tx, ty]
                 )
-                self.z_buffer[:, y] = dist
+                self.z_buffer[:, y] = perp
 
     def _render_sky(self, frame, pa):
         """
