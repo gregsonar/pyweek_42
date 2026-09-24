@@ -6,8 +6,7 @@ import random
 import numpy as np
 import pygame as pg
 
-from . import audio
-from . import config
+from . import audio, config
 from .app import App
 from .entities import Spark
 from .hud import Hud
@@ -59,6 +58,7 @@ class GameplayScene(Scene):
             20: "assets/textures/walls/wall_window_4_up.png",
             21: "assets/textures/walls/wall_concrete_01_up.png",
             22: "assets/textures/walls/wall_concrete_02_up.png",
+            23: "assets/textures/walls/wall-outside-window.png",
             "floor": "assets/textures/flats/floor_grate.png",
             "floor2": "assets/textures/flats/floor_grate_2.png",  # 2-й вариант пола
             "ceil": "assets/textures/flats/ceiling_panel.png",
@@ -182,17 +182,20 @@ class GameplayScene(Scene):
         """Расставляет неинтерактивный декор. Сторона квадрата = max(w, h)."""
         base = "assets/textures/sprites/"
 
-        def prop(name, real_w, real_h, x, y, y_offset=0.0):
+        def prop(
+            name, real_w, real_h, x, y, y_offset=0.0, solid=False, block_radius=None
+        ):
             side = max(real_w, real_h)
             spr = load_sprite(base + name)
             return Interactable(
                 x,
                 y,
-                [InteractState(spr)],
+                [InteractState(spr, solid=solid)],
                 angle=0.0,
                 width=side,
                 height=side,
                 y_offset=y_offset,
+                block_radius=block_radius,
             )
 
         return [
@@ -206,6 +209,8 @@ class GameplayScene(Scene):
             prop("spr_crate_b.png", 1.00, 1.05, 5.0, 8.5),
             prop("spr_shrooms.png", 0.55, 0.34, 7.0, 8.7),
             prop("spr_overlay.png", 0.85, 0.52, 9.5, 7.5, y_offset=1.0),
+            # solid=True делает пропс непроходимым; block_radius - радиус блокировки
+            prop("window.png", 1, 1, 11.5, 8.5, solid=True, block_radius=0.4),
         ]
 
     def _build_traps(self):
@@ -223,12 +228,21 @@ class GameplayScene(Scene):
         ]
 
     def _blocked_by_object(self, nx, ny):
-        """Есть ли рядом с точкой (nx, ny) твёрдый объект, мешающий проходу."""
-        for obj in self.interactables:
-            if (
-                obj.solid
-                and np.hypot(obj.x - nx, obj.y - ny) < config.OBJECT_BLOCK_RADIUS
-            ):
+        """Есть ли рядом с точкой (nx, ny) твёрдый объект, мешающий проходу.
+
+        Проверяются и интерактивные объекты, и декор (пропсы): непроходимость
+        задаётся флагом solid у состояния. Радиус блокировки - block_radius
+        объекта, иначе общий config.OBJECT_BLOCK_RADIUS.
+        """
+        for obj in self.interactables + self.props:
+            if not obj.solid:
+                continue
+            radius = (
+                obj.block_radius
+                if obj.block_radius is not None
+                else config.OBJECT_BLOCK_RADIUS
+            )
+            if np.hypot(obj.x - nx, obj.y - ny) < radius:
                 return True
         return False
 
@@ -255,9 +269,7 @@ class GameplayScene(Scene):
                 self.hud.set_language(self.app.language)
             elif event.key == pg.K_f and self.player_can_act:
                 self.time_ctrl.toggle_freeze()
-                audio.play(
-                    "freeze" if not self.time_ctrl.world_running else "unfreeze"
-                )
+                audio.play("freeze" if not self.time_ctrl.world_running else "unfreeze")
             elif event.key == pg.K_F10:
                 self._win()  # ВРЕМЕННО: имитация победы (пока нет цели уровня)
 

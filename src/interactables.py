@@ -26,11 +26,15 @@ class Interactable:
     """Интерактивный объект-билборд с состояниями."""
 
     def __init__(self, x, y, states, angle=0.0, width=1.0, interact_radius=None,
-                 height=1.0, y_offset=0.0, cyclic=True, highlight_sprite=None):
+                 height=1.0, y_offset=0.0, cyclic=True, highlight_sprite=None,
+                 block_radius=None):
         self.x = x
         self.y = y
         self.states = states
         self.state = 0
+        # Радиус блокировки прохода (если solid). None -> config.OBJECT_BLOCK_RADIUS.
+        # Для крупных объектов задаётся больше, чтобы игрок не влезал в спрайт.
+        self.block_radius = block_radius
         # Ориентация плоской поверхности: angle - направление её касательной
         # (вдоль какой оси она вытянута), width - ширина в мировых единицах.
         # Поверхность неподвижна в пространстве и не поворачивается за игроком.
