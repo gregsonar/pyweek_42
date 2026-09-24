@@ -131,6 +131,7 @@ class GameplayScene(Scene):
         self.level_number = level.number
         self._time_limit_ticks = round(level.time_limit * config.TICK_RATE)
         self.time_left_ticks = self._time_limit_ticks
+        self.completion_time = None  # время добега до двери (сек), ставится в _win
 
         # Вводное сообщение уровня (только при первом входе)
         self._show_level_intro()
@@ -142,10 +143,14 @@ class GameplayScene(Scene):
     def _win(self):
         """Завершение уровня -> экран победы (с фейдом).
 
-        ВРЕМЕННО вызывается по F10, пока в уровне нет реальной цели/выхода.
+        Основной триггер - дверь-выход (E, см. update_interaction). F10 оставлен
+        временно как дев-шорткат (потом убрать или вынести в чит-режим).
+        Фиксируем время добега до двери от старта уровня (без экранного сообщения).
         """
         from .victory import VictoryScene
 
+        self.completion_time = self.timer.seconds
+        print("level complete in %.2f s" % self.completion_time, flush=True)
         self.app.fade_to(VictoryScene(self.app))
 
     def _show_level_intro(self):
@@ -159,6 +164,22 @@ class GameplayScene(Scene):
         btn = button_states()  # кнопка пока на заглушке
         door_closed = load_sprite("assets/textures/sprites/spr_door1_closed.png")
         door_open = load_sprite("assets/textures/sprites/spr_door1_open.png")
+        exit_closed = load_sprite("assets/textures/sprites/spr_door2_closed-exit.png")
+
+        # Дверь-выход с уровня: одно состояние (закрыта, solid). Использование по
+        # E завершает уровень (обрабатывается в update_interaction -> _win).
+        # angle=pi - лицом к игроку (север); y вплотную к южной стене (row 10).
+        self.exit_door = Interactable(
+            8.5,
+            9.99,
+            [InteractState(exit_closed, solid=True)],
+            angle=np.pi,
+            width=1.0,
+            height=1.0,
+            y_offset=0.0,
+            cyclic=False,
+        )
+
         return [
             # Кнопка на северной грани перегородки: поверхность вдоль X, приподнята
             Interactable(
@@ -186,6 +207,7 @@ class GameplayScene(Scene):
                 y_offset=0.0,
                 cyclic=True,
             ),
+            self.exit_door,
         ]
 
     def _build_props(self):
@@ -496,7 +518,14 @@ class GameplayScene(Scene):
             and self.highlighted is not None
             and self.player_can_act
         ):
-            self.highlighted.use()
+            # Одноразовое срабатывание: гасим флаг сразу, чтобы использование не
+            # повторялось на следующих кадрах (например, во время фейда, когда
+            # handle_events не вызывается и не сбрасывает флаг сам).
+            self.interact_pressed = False
+            if self.highlighted is self.exit_door:
+                self._win()  # дверь-выход завершает уровень
+            else:
+                self.highlighted.use()
 
     def world_step(self):
         """Один мировой тик: обратный отсчёт и циклы ловушек.
