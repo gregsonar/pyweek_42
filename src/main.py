@@ -61,11 +61,21 @@ class GameplayScene(Scene):
             23: "assets/textures/walls/wall-outside-window.png",
             "floor": "assets/textures/flats/floor_grate.png",
             "floor2": "assets/textures/flats/floor_grate_2.png",  # 2-й вариант пола
+            "floor_outside": "assets/textures/flats/outside-window-floor.png",
             "ceil": "assets/textures/flats/ceiling_panel.png",
             "ceil2": "assets/textures/flats/ceiling_panel-2.png",  # 2-й вариант потолка
             "sky": "assets/textures/flats/sky.png",  # для режима SKY_MODE
         }
         textures = load_textures(texture_paths)
+
+        # Кастомные тайлы пола по клеткам: (строка, столбец) -> текстура.
+        # Строятся из config.FLOOR_OVERRIDES (ключ текстуры -> массив). Клетки
+        # с неизвестным ключом пропускаем.
+        self._floor_overrides = {
+            cell: textures[key]
+            for cell, key in config.FLOOR_OVERRIDES.items()
+            if key in textures
+        }
 
         # HUD (шрифты готовы - pygame инициализирован в App). Язык хранит App.
         self.hud = Hud(self.app.language)
@@ -415,8 +425,9 @@ class GameplayScene(Scene):
         frame.fill(0.0)
         self.renderer.begin_frame()
 
-        # 1. Пол и потолок (с подменой тайлов под ловушками)
-        floor_tiles = {trap.cell: trap.texture for trap in self.traps}
+        # 1. Пол и потолок (кастомные тайлы пола по клеткам + подмена под ловушками)
+        floor_tiles = dict(self._floor_overrides)
+        floor_tiles.update({trap.cell: trap.texture for trap in self.traps})
         self.renderer.render_floor_ceiling(
             frame,
             self.player["x"],
