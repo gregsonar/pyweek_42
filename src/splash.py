@@ -52,7 +52,7 @@ class SplashScene(Scene):
         if self._done:
             return
         self._done = True
-        self.app.replace_scene(MainMenuScene(self.app))
+        self.app.fade_to(MainMenuScene(self.app))
 
     def handle_events(self, events):
         for event in events:

@@ -28,6 +28,8 @@ class App:
         self.language = self.save.language or config.LANGUAGE
         self.running = True
         self._scenes = []  # стек сцен, верхняя - активная
+        self._fade = None  # активный переход между сценами (или None)
+        self._fade_surf = None  # поверхность затемнения перехода (ленивая)
 
     def set_language(self, language):
         """Сменить язык интерфейса и сохранить выбор."""
@@ -65,6 +67,42 @@ class App:
         scene.on_enter()
         self._apply_mouse_mode()
 
+    def fade_to(self, new_scene):
+        """Плавно перейти к сцене: затемнение -> замена на середине -> проявление."""
+        if self._fade is not None:
+            return  # переход уже идёт
+        self._fade = {"phase": "out", "t": 0.0, "next": new_scene}
+
+    def _advance_fade(self, dt):
+        """Продвинуть текущий переход; на середине заменить сцену."""
+        fade = self._fade
+        fade["t"] += dt
+        if fade["t"] < config.FADE_DURATION:
+            return
+        if fade["phase"] == "out":
+            self.replace_scene(fade["next"])  # полностью затемнено - меняем сцену
+            fade["phase"] = "in"
+            fade["t"] = 0.0
+            fade["next"] = None
+        else:
+            self._fade = None  # переход завершён
+
+    def _fade_alpha(self):
+        """Прозрачность 0..1 чёрного оверлея по фазе перехода."""
+        frac = min(1.0, self._fade["t"] / config.FADE_DURATION)
+        return frac if self._fade["phase"] == "out" else 1.0 - frac
+
+    def _draw_fade(self):
+        """Наложить чёрный оверлей текущего перехода поверх сцены."""
+        alpha = int(max(0.0, min(1.0, self._fade_alpha())) * 255)
+        if alpha <= 0:
+            return
+        if self._fade_surf is None:
+            self._fade_surf = pg.Surface((config.WIN_WIDTH, config.WIN_HEIGHT))
+            self._fade_surf.fill(config.FADE_COLOR)
+        self._fade_surf.set_alpha(alpha)
+        self.screen.blit(self._fade_surf, (0, 0))
+
     def quit(self):
         """Завершить приложение."""
         self.running = False
@@ -87,13 +125,19 @@ class App:
             for event in events:
                 if event.type == pg.QUIT:
                     self.running = False
+            # Во время перехода ввод сцен блокируем (чтобы не сработало дважды)
+            fading = self._fade is not None
             scene = self.scene
-            if scene is not None:
+            if scene is not None and not fading:
                 scene.handle_events(events)
             # сцена могла смениться в handle_events - обновляем актуальную верхнюю
             if self.scene is not None:
                 self.scene.update(dt)
+            if self._fade is not None:
+                self._advance_fade(dt)
             self._draw()
+            if self._fade is not None:
+                self._draw_fade()
             pg.display.flip()
         pg.quit()
 

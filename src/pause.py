@@ -49,7 +49,7 @@ class PauseScene(Scene):
         from .menu import MainMenuScene
 
         self.app.pop_scene()  # снять паузу
-        self.app.replace_scene(MainMenuScene(self.app))  # игра -> меню
+        self.app.fade_to(MainMenuScene(self.app))  # игра -> меню с фейдом
 
     def handle_events(self, events):
         for event in events:
