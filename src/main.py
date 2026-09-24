@@ -6,6 +6,7 @@ import random
 import numpy as np
 import pygame as pg
 
+from . import audio
 from . import config
 from .app import App
 from .entities import Spark
@@ -254,6 +255,9 @@ class GameplayScene(Scene):
                 self.hud.set_language(self.app.language)
             elif event.key == pg.K_f and self.player_can_act:
                 self.time_ctrl.toggle_freeze()
+                audio.play(
+                    "freeze" if not self.time_ctrl.world_running else "unfreeze"
+                )
             elif event.key == pg.K_F10:
                 self._win()  # ВРЕМЕННО: имитация победы (пока нет цели уровня)
 
@@ -522,8 +526,9 @@ class GameplayScene(Scene):
         self.hp -= amount
         # Кратко станим игрока, чтобы урон ощущался (движение/ввод отключены)
         self._stun_ticks = config.PLAYER_STUN_TICKS
-        # Полноэкранная вспышка урона в HUD
+        # Полноэкранная вспышка урона в HUD + звук
         self.hud.flash_damage()
+        audio.play("hurt")
         print("player hit by trap, hp=%d" % self.hp, flush=True)
         if self.hp <= 0:
             print("player died - level restart", flush=True)

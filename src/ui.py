@@ -3,6 +3,7 @@
 
 import pygame as pg
 
+from . import audio
 from . import config
 from .fonts import load_font
 
@@ -45,11 +46,14 @@ class Menu:
         n = len(self.items)
         if n == 0:
             return
+        old = self.selected
         i = self.selected
         for _ in range(n):
             i = (i + delta) % n
             if self.items[i].enabled:
                 self.selected = i
+                if i != old:
+                    audio.play("ui_move")
                 return
 
     def activate(self):
@@ -57,6 +61,7 @@ class Menu:
         if 0 <= self.selected < len(self.items):
             item = self.items[self.selected]
             if item.enabled:
+                audio.play("ui_select")
                 item.action()
 
     def handle_event(self, event):
@@ -78,6 +83,8 @@ class Menu:
         """Навести выбор на пункт под курсором. -> True, если попали в активный."""
         for idx, item in enumerate(self.items):
             if item.rect and item.rect.collidepoint(pos) and item.enabled:
+                if idx != self.selected:
+                    audio.play("ui_move")
                 self.selected = idx
                 return True
         return False

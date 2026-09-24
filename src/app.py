@@ -3,6 +3,7 @@
 
 import pygame as pg
 
+from . import audio
 from . import config
 from . import save as save_module
 from .i18n import tr
@@ -19,6 +20,7 @@ class App:
 
     def __init__(self):
         pg.init()
+        audio.init()  # менеджер звука (тихий, пока нет звуковых файлов)
         self.screen = pg.display.set_mode((config.WIN_WIDTH, config.WIN_HEIGHT))
         pg.display.set_caption(tr("game_title"))
         self.clock = pg.time.Clock()
