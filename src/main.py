@@ -165,18 +165,20 @@ class GameplayScene(Scene):
             self.hud.set_message(key, seconds=config.LEVEL_MSG_SECONDS)
 
     def _build_interactables(self):
-        """Собирает интерактивные объекты, управляемые двери и связи кнопок.
+        """Интерактивные объекты: из дата-таблицы (двери/выход) + игровые в коде.
 
-        Возвращает список объектов, используемых напрямую по E (кнопки, дверь-
-        выход). Двери, управляемые кнопками, кладутся в self.linked_doors и
-        связываются через self.button_links (E на них не действует). Чтобы
-        добавить связь на новом уровне - создать дверь, добавить её в
-        linked_doors и завести ButtonLink(кнопка, [двери]).
+        Двери и выход грузятся из config.INTERACTABLES (совместимо с дизайнером
+        уровней) через _load_interactables (он же ставит self.exit_door). Кнопку
+        и управляемую ею запираемую дверь редактор пока не расставляет - они
+        собираются здесь и связываются ButtonLink. Чтобы добавить связь на новом
+        уровне - создать дверь, добавить в self.linked_doors и завести ButtonLink.
         """
+        data_objs = self._load_interactables(config.INTERACTABLES)
+
+        # Игровые объекты в коде: кнопка + запираемая дверь + связь.
         btn = button_states()  # кнопка пока на заглушке
         door_closed = load_sprite("assets/textures/sprites/spr_door1_closed.png")
         door_open = load_sprite("assets/textures/sprites/spr_door1_open.png")
-        exit_closed = load_sprite("assets/textures/sprites/spr_door2_closed-exit.png")
         # Текстура ЗАПЕРТОЙ двери (связь есть, кнопка не нажата, выключенное сост.)
         door_locked = load_sprite("assets/textures/sprites/spr_door1_closed_off.png")
 
@@ -214,74 +216,102 @@ class GameplayScene(Scene):
             block_radius=config.OBJECT_BLOCK_RADIUS + 0.2,
         )
 
-        # Дверь-выход: E завершает уровень; радиус срабатывания вдвое меньше.
-        self.exit_door = Interactable(
-            8.5,
-            9.99,
-            [InteractState(exit_closed, solid=True)],
-            angle=np.pi,
-            width=1.0,
-            height=1.0,
-            y_offset=0.0,
-            cyclic=False,
-            interact_radius=config.INTERACT_RADIUS * 0.5,
-        )
-
         # Двери под управлением кнопок (рендер+коллизия, но не по E) и их связи.
         self.linked_doors = [partition_door]
         self.button_links = [
             ButtonLink(button, [partition_door], open_state=1),
         ]
 
-        return [button, self.exit_door]
+        return [button] + data_objs
+
+    def _load_interactables(self, table):
+        """Строит интерактивные объекты из дата-таблицы (совместимо с дизайнером).
+
+        kind "door" -> [закрыта(solid), открыта(не solid)]; kind "exit" ->
+        [закрыта(solid)], cyclic=False, запоминается как self.exit_door (по E -
+        завершает уровень), радиус срабатывания вдвое меньше обычного. Пути к
+        спрайтам - относительно assets/textures/.
+        """
+        pref = "assets/textures/"
+        objs = []
+        for spec in table:
+            kind = spec["kind"]
+            common = dict(
+                angle=spec.get("angle", 0.0),
+                width=spec.get("width", 1.0),
+                height=spec.get("height", 1.0),
+                y_offset=spec.get("y_offset", 0.0),
+                cyclic=spec.get("cyclic", True),
+            )
+            if kind == "door":
+                obj = Interactable(
+                    spec["x"],
+                    spec["y"],
+                    [
+                        InteractState(load_sprite(pref + spec["closed"]), solid=True),
+                        InteractState(load_sprite(pref + spec["open"]), solid=False),
+                    ],
+                    **common,
+                )
+            elif kind == "exit":
+                obj = Interactable(
+                    spec["x"],
+                    spec["y"],
+                    [InteractState(load_sprite(pref + spec["closed"]), solid=True)],
+                    interact_radius=config.INTERACT_RADIUS * 0.5,
+                    **common,
+                )
+                self.exit_door = obj
+            else:
+                continue  # неизвестный kind - пропускаем
+            objs.append(obj)
+        return objs
 
     def _build_props(self):
-        """Расставляет неинтерактивный декор. Сторона квадрата = max(w, h)."""
-        base = "assets/textures/sprites/"
+        """Декор из дата-таблицы config.PROPS (совместимо с дизайнером уровней)."""
+        return self._load_props(config.PROPS)
 
-        def prop(
-            name, real_w, real_h, x, y, y_offset=0.0, solid=False, block_radius=None
-        ):
-            side = max(real_w, real_h)
-            spr = load_sprite(base + name)
-            return Interactable(
-                x,
-                y,
-                [InteractState(spr, solid=solid)],
-                angle=0.0,
-                width=side,
-                height=side,
-                y_offset=y_offset,
-                block_radius=block_radius,
+    def _load_props(self, table):
+        """Строит декор-пропсы из таблицы.
+
+        Запись: (file, w, h, x, y, y_offset, solid, block_radius). file - путь
+        относительно assets/textures/. Сторона билборда = max(w, h).
+        block_radius=None -> дефолт config.OBJECT_BLOCK_RADIUS.
+        """
+        props = []
+        for file, w, h, x, y, y_offset, solid, block_radius in table:
+            spr = load_sprite("assets/textures/" + file)
+            side = max(w, h)
+            props.append(
+                Interactable(
+                    x,
+                    y,
+                    [InteractState(spr, solid=solid)],
+                    angle=0.0,
+                    width=side,
+                    height=side,
+                    y_offset=y_offset,
+                    block_radius=block_radius,
+                )
             )
-
-        return [
-            # Северная половина
-            # prop("spr_bed.png", 2.00, 0.74, 2.5, 1.6),
-            # prop("spr_chair.png", 0.62, 1.00, 8.0, 1.6),
-            prop("spr_plant.png", 0.62, 0.85, 10.5, 1.6),
-            prop("spr_plant.png", 0.62, 0.85, 7.5, 1.6),
-            # Южная половина
-            prop("spr_crate_a.png", 1.20, 0.82, 3.5, 8.5),
-            prop("spr_crate_b.png", 1.00, 1.05, 5.0, 8.5),
-            prop("spr_shrooms.png", 0.55, 0.34, 7.0, 8.7),
-            prop("spr_overlay.png", 0.85, 0.52, 9.5, 7.5, y_offset=1.0),
-            # solid=True делает пропс непроходимым; block_radius - радиус блокировки
-            prop("window.png", 1, 1, 11.5, 8.5, solid=True, block_radius=0.4),
-        ]
+        return props
 
     def _build_traps(self):
-        """Демо-ловушки. Пассивная текстура - временно обесцвеченная активная."""
+        """Ловушки из дата-таблицы config.TRAPS (совместимо с дизайнером уровней)."""
+        return self._load_traps(config.TRAPS)
+
+    def _load_traps(self, table):
+        """Строит ловушки из таблицы: (x, y, on_ticks, off_ticks, start_active).
+
+        Текстуры ловушки (активная + обесцвеченная пассивная) - на стороне игры.
+        """
         tex_on = load_texture("assets/textures/flats/floor_trap_enabled.png")
         tex_off = desaturate(
             tex_on, amount=config.TRAP_OFF_DESATURATE, dim=config.TRAP_OFF_DIM
         )
-        on, off = config.TRAP_ON_TICKS, config.TRAP_OFF_TICKS
         return [
-            # На пути от старта на север (игрок наступит)
-            Trap(6, 3, tex_on, tex_off, on, off, start_active=True),
-            # Южная половина, другой ритм и противофаза
-            Trap(3, 8, tex_on, tex_off, 60, 120, start_active=False),
+            Trap(x, y, tex_on, tex_off, on, off, start_active=active)
+            for (x, y, on, off, active) in table
         ]
 
     @property

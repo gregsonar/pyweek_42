@@ -235,3 +235,36 @@ DEFAULT_LEVEL = Level(
     time_limit=LEVEL_TIME_LIMIT,
     number=1,
 )
+
+
+# --- Объекты уровня: дата-таблицы (совместимо с дизайнером уровней) ---
+# Загрузчики - в GameplayScene (_load_props / _load_interactables / _load_traps).
+# Пути к спрайтам - относительно assets/textures/ (например "sprites/window.png").
+# Кнопку и запираемую (управляемую кнопкой) дверь редактор пока не расставляет -
+# они остаются в коде игры (_build_interactables).
+
+# PROPS: (file, w, h, x, y, y_offset, solid, block_radius).
+# Сторона билборда = max(w, h). block_radius=None -> дефолт OBJECT_BLOCK_RADIUS.
+PROPS = [
+    ("sprites/spr_plant.png", 0.62, 0.85, 10.5, 1.6, 0.0, False, None),
+    ("sprites/spr_plant.png", 0.62, 0.85, 7.5, 1.6, 0.0, False, None),
+    ("sprites/spr_crate_a.png", 1.20, 0.82, 3.5, 8.5, 0.0, False, None),
+    ("sprites/spr_crate_b.png", 1.00, 1.05, 5.0, 8.5, 0.0, False, None),
+    ("sprites/spr_shrooms.png", 0.55, 0.34, 7.0, 8.7, 0.0, False, None),
+    ("sprites/spr_overlay.png", 0.85, 0.52, 9.5, 7.5, 1.0, False, None),
+    ("sprites/window.png", 1, 1, 11.5, 8.5, 0.0, True, 0.4),
+]
+
+# INTERACTABLES: {kind, x, y, angle, width, height, y_offset, cyclic, <файлы>}.
+# kind "door" -> файлы "closed"/"open"; kind "exit" -> "closed" (по E - выход).
+INTERACTABLES = [
+    {"kind": "exit", "x": 8.5, "y": 9.99, "angle": math.pi,
+     "width": 1, "height": 1, "y_offset": 0.0, "cyclic": False,
+     "closed": "sprites/spr_door2_closed-exit.png"},
+]
+
+# TRAPS: (x, y, on_ticks, off_ticks, start_active). Текстуры ловушек - в коде.
+TRAPS = [
+    (6, 3, 90, 90, True),
+    (3, 8, 60, 120, False),
+]
