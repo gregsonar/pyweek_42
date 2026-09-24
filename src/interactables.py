@@ -73,6 +73,48 @@ class Interactable:
         return self.current
 
 
+class ButtonLink:
+    """
+    Связь кнопки с дверьми: кнопка РАЗБЛОКИРУЕТ двери (не открывает их сразу).
+
+    Пока кнопка в состоянии open_state (например, зелёном), дверь разблокирована:
+    становится обычным E-объектом (её открывает игрок по E у самой двери). Иначе
+    дверь заперта (состояние locked_index) и по E не используется.
+
+    Состояния управляемой двери (по индексам):
+      locked_index   (0) - заперта: solid, не подсвечивается/не по E;
+      unlocked_index (1) - закрыта, но разблокирована: solid, открывается по E;
+      open_index     (2) - открыта: не solid (управляется игроком по E).
+
+    Удобно собирать уровни: одна кнопка -> список управляемых дверей.
+    """
+
+    def __init__(self, button, doors, open_state=1,
+                 locked_index=0, unlocked_index=1):
+        self.button = button
+        self.doors = list(doors)
+        self.open_state = open_state        # состояние кнопки, снимающее блокировку
+        self.locked_index = locked_index    # индекс "заперта"
+        self.unlocked_index = unlocked_index  # индекс "закрыта, разблокирована"
+
+    def sync(self):
+        """Обновить блокировку дверей по состоянию кнопки (каждый кадр)."""
+        if self.button.state == self.open_state:
+            # разблокировать: только запертые переводим в "закрыта" (открытую не
+            # трогаем - её состоянием управляет игрок)
+            for door in self.doors:
+                if door.state == self.locked_index:
+                    door.state = self.unlocked_index
+        else:
+            # запереть все связанные двери (закрывает открытую)
+            for door in self.doors:
+                door.state = self.locked_index
+
+    def is_unlocked(self, door):
+        """Разблокирована ли дверь (не заперта)."""
+        return door.state != self.locked_index
+
+
 def select_highlight(objects, px, py, pa, game_map):
     """
     Выбирает единственный подсвечиваемый объект.

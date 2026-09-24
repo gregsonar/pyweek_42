@@ -11,7 +11,12 @@ from .app import App
 from .entities import Spark
 from .hud import Hud
 from .i18n import has
-from .interactables import Interactable, InteractState, select_highlight
+from .interactables import (
+    ButtonLink,
+    Interactable,
+    InteractState,
+    select_highlight,
+)
 from .placeholder_sprites import button_states
 from .renderer import Renderer
 from .scene import Scene
@@ -160,15 +165,56 @@ class GameplayScene(Scene):
             self.hud.set_message(key, seconds=config.LEVEL_MSG_SECONDS)
 
     def _build_interactables(self):
-        """Расставляет объекты на карте по умолчанию."""
+        """Собирает интерактивные объекты, управляемые двери и связи кнопок.
+
+        Возвращает список объектов, используемых напрямую по E (кнопки, дверь-
+        выход). Двери, управляемые кнопками, кладутся в self.linked_doors и
+        связываются через self.button_links (E на них не действует). Чтобы
+        добавить связь на новом уровне - создать дверь, добавить её в
+        linked_doors и завести ButtonLink(кнопка, [двери]).
+        """
         btn = button_states()  # кнопка пока на заглушке
         door_closed = load_sprite("assets/textures/sprites/spr_door1_closed.png")
         door_open = load_sprite("assets/textures/sprites/spr_door1_open.png")
         exit_closed = load_sprite("assets/textures/sprites/spr_door2_closed-exit.png")
+        # Текстура ЗАПЕРТОЙ двери (связь есть, кнопка не нажата, выключенное сост.)
+        door_locked = load_sprite("assets/textures/sprites/spr_door1_closed_off.png")
 
-        # Дверь-выход с уровня: одно состояние (закрыта, solid). Использование по
-        # E завершает уровень (обрабатывается в update_interaction -> _win).
-        # angle=pi - лицом к игроку (север); y вплотную к южной стене (row 10).
+        # Кнопка (E циклит: 0 красная -> 1 зелёная). На северной грани перегородки.
+        button = Interactable(
+            5.0,
+            4.6,
+            [InteractState(btn[0]), InteractState(btn[1])],
+            angle=0.0,
+            width=0.5,
+            height=0.5,
+            y_offset=0.35,
+            cyclic=True,
+        )
+
+        # Межкомнатная дверь в проёме перегородки. Управляется кнопкой: кнопка
+        # РАЗБЛОКИРУЕТ дверь, а открывает её игрок по E у самой двери.
+        # Состояния: 0 заперта (locked-текстура, solid, не по E), 1 закрыта но
+        # разблокирована (solid, открывается по E), 2 открыта (не solid).
+        # block_radius больше стандартного, чтобы закрытую нельзя было
+        # проскользнуть по краю.
+        partition_door = Interactable(
+            6.5,
+            5.5,
+            [
+                InteractState(door_locked, solid=True),
+                InteractState(door_closed, solid=True),
+                InteractState(door_open, solid=False),
+            ],
+            angle=0.0,
+            width=1.0,
+            height=1.0,
+            y_offset=0.0,
+            cyclic=False,
+            block_radius=config.OBJECT_BLOCK_RADIUS + 0.2,
+        )
+
+        # Дверь-выход: E завершает уровень; радиус срабатывания вдвое меньше.
         self.exit_door = Interactable(
             8.5,
             9.99,
@@ -178,37 +224,16 @@ class GameplayScene(Scene):
             height=1.0,
             y_offset=0.0,
             cyclic=False,
+            interact_radius=config.INTERACT_RADIUS * 0.5,
         )
 
-        return [
-            # Кнопка на северной грани перегородки: поверхность вдоль X, приподнята
-            Interactable(
-                5.0,
-                4.6,
-                [InteractState(btn[0]), InteractState(btn[1])],
-                angle=0.0,
-                width=0.5,
-                height=0.5,
-                y_offset=0.35,
-                cyclic=True,
-            ),
-            # Дверь в проёме перегородки: поверхность вдоль X (перекрывает проход
-            # по Y), в один тайл, ровно в нижнем поясе
-            Interactable(
-                6.5,
-                5.5,
-                [
-                    InteractState(door_closed, solid=True),
-                    InteractState(door_open, solid=False),
-                ],
-                angle=0.0,
-                width=1.0,
-                height=1.0,
-                y_offset=0.0,
-                cyclic=True,
-            ),
-            self.exit_door,
+        # Двери под управлением кнопок (рендер+коллизия, но не по E) и их связи.
+        self.linked_doors = [partition_door]
+        self.button_links = [
+            ButtonLink(button, [partition_door], open_state=1),
         ]
+
+        return [button, self.exit_door]
 
     def _build_props(self):
         """Расставляет неинтерактивный декор. Сторона квадрата = max(w, h)."""
@@ -259,14 +284,19 @@ class GameplayScene(Scene):
             Trap(3, 8, tex_on, tex_off, 60, 120, start_active=False),
         ]
 
+    @property
+    def _world_objects(self):
+        """Все спрайтовые объекты сцены: интерактивные, декор, управляемые двери."""
+        return self.interactables + self.props + self.linked_doors
+
     def _blocked_by_object(self, nx, ny):
         """Есть ли рядом с точкой (nx, ny) твёрдый объект, мешающий проходу.
 
-        Проверяются и интерактивные объекты, и декор (пропсы): непроходимость
-        задаётся флагом solid у состояния. Радиус блокировки - block_radius
-        объекта, иначе общий config.OBJECT_BLOCK_RADIUS.
+        Проверяются интерактивные объекты, декор (пропсы) и управляемые двери:
+        непроходимость задаётся флагом solid у состояния. Радиус блокировки -
+        block_radius объекта, иначе общий config.OBJECT_BLOCK_RADIUS.
         """
-        for obj in self.interactables + self.props:
+        for obj in self._world_objects:
             if not obj.solid:
                 continue
             radius = (
@@ -469,7 +499,7 @@ class GameplayScene(Scene):
             self.player["x"],
             self.player["y"],
             self.player["angle"],
-            self.interactables + self.props,
+            self._world_objects,
             self.highlighted,
         )
 
@@ -506,8 +536,17 @@ class GameplayScene(Scene):
 
     def update_interaction(self):
         """Выбор подсвеченного объекта и его использование по нажатию E."""
+        # Блокировка управляемых дверей следует за кнопками (до выбора подсветки)
+        for link in self.button_links:
+            link.sync()
+
+        # Кандидаты на подсветку: обычные E-объекты + РАЗБЛОКИРОВАННЫЕ двери
+        # (заперта = state 0 -> не подсвечивается, по E не используется)
+        candidates = self.interactables + [
+            door for door in self.linked_doors if door.state != 0
+        ]
         self.highlighted = select_highlight(
-            self.interactables,
+            candidates,
             self.player["x"],
             self.player["y"],
             self.player["angle"],
@@ -524,6 +563,9 @@ class GameplayScene(Scene):
             self.interact_pressed = False
             if self.highlighted is self.exit_door:
                 self._win()  # дверь-выход завершает уровень
+            elif self.highlighted in self.linked_doors:
+                # разблокированная дверь: E переключает закрыта(1) <-> открыта(2)
+                self.highlighted.state = 2 if self.highlighted.state == 1 else 1
             else:
                 self.highlighted.use()
 
@@ -598,6 +640,8 @@ class GameplayScene(Scene):
             trap.reset()
         for obj in self.interactables:
             obj.state = 0
+        for door in self.linked_doors:
+            door.state = 0  # управляемые двери - закрыты (кнопки сброшены выше)
         self.highlighted = None
         self.interact_pressed = False
         # Сброс времени (бюджет/долг/состояние)
