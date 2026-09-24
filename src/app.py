@@ -4,6 +4,8 @@
 import pygame as pg
 
 from . import config
+from . import save as save_module
+from .i18n import tr
 
 
 class App:
@@ -18,11 +20,24 @@ class App:
     def __init__(self):
         pg.init()
         self.screen = pg.display.set_mode((config.WIN_WIDTH, config.WIN_HEIGHT))
-        pg.display.set_caption("Borrowed Time")
+        pg.display.set_caption(tr("game_title"))
         self.clock = pg.time.Clock()
-        self.language = config.LANGUAGE
+        # Сохранение (портативное): язык и прогресс. Язык берём из сейва, иначе -
+        # значение по умолчанию из config.
+        self.save = save_module.load()
+        self.language = self.save.language or config.LANGUAGE
         self.running = True
         self._scenes = []  # стек сцен, верхняя - активная
+
+    def set_language(self, language):
+        """Сменить язык интерфейса и сохранить выбор."""
+        self.language = language
+        self.save.language = language
+        self.persist()
+
+    def persist(self):
+        """Записать текущее сохранение на диск."""
+        save_module.persist(self.save)
 
     # --- управление стеком ---
     @property

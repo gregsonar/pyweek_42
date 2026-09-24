@@ -241,7 +241,7 @@ class GameplayScene(Scene):
             elif event.key == pg.K_e:
                 self.interact_pressed = True
             elif event.key == pg.K_l:
-                self.app.language = "ru" if self.app.language == "en" else "en"
+                self.app.set_language("ru" if self.app.language == "en" else "en")
                 self.hud.set_language(self.app.language)
             elif event.key == pg.K_f and self.player_can_act:
                 self.time_ctrl.toggle_freeze()
@@ -543,10 +543,10 @@ class GameplayScene(Scene):
 
 
 def run_engine():
-    """Точка входа: запустить приложение с главного меню."""
-    # Ленивый импорт разрывает цикл main <-> menu (menu импортирует GameplayScene)
-    from .menu import MainMenuScene
+    """Точка входа: запустить приложение со сплеш-заставки."""
+    # Ленивый импорт разрывает цикл main <-> splash/menu (импортируют GameplayScene)
+    from .splash import SplashScene
 
     app = App()
-    app.push_scene(MainMenuScene(app))
+    app.push_scene(SplashScene(app))
     app.run()

@@ -12,7 +12,7 @@ STRINGS = {
         "level_1_msg": "Everything has a beginning",
         "time_up": "Time's up!",
         # Меню и экраны
-        "game_title": "Borrowed Time",
+        "game_title": "ChronoKhryshch",
         "menu_new_game": "New Game",
         "menu_continue": "Continue",
         "menu_language": "Language",
@@ -23,13 +23,16 @@ STRINGS = {
         "pause_resume": "Resume",
         "pause_main_menu": "Main Menu",
         "pause_quit": "Quit Game",
+        "confirm_new_game": "Start over? Progress will be lost.",
+        "confirm_yes": "Yes",
+        "confirm_no": "No",
     },
     "ru": {
         "level": "Уровень {n}",
         "level_1_msg": "Всё когда-то начинается",
         "time_up": "Время вышло!",
         # Меню и экраны
-        "game_title": "Borrowed Time",
+        "game_title": "ХроноХрущ",
         "menu_new_game": "Новая игра",
         "menu_continue": "Продолжить",
         "menu_language": "Язык",
@@ -40,6 +43,9 @@ STRINGS = {
         "pause_resume": "Продолжить",
         "pause_main_menu": "В главное меню",
         "pause_quit": "Выйти совсем",
+        "confirm_new_game": "Начать заново? Прогресс будет потерян.",
+        "confirm_yes": "Да",
+        "confirm_no": "Нет",
     },
 }
 

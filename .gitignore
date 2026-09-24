@@ -169,6 +169,9 @@ __marimo__/
 # Local notes
 notes.md
 
+# Runtime save (портативное сохранение игры)
+save.json
+
 # Preview artifacts
 for_artist/
 *.zip

@@ -2,6 +2,7 @@
 """Главное меню игры."""
 
 from . import config
+from .confirm import ConfirmScene
 from .fonts import load_font
 from .i18n import tr
 from .main import GameplayScene
@@ -22,8 +23,8 @@ class MainMenuScene(Scene):
                 MenuItem(
                     lambda: tr("menu_continue", self.app.language),
                     self._continue,
-                    # неактивна до системы сохранения (шаг 5 плана)
-                    enabled_fn=lambda: False,
+                    # активна только при наличии сохранённого прогресса
+                    enabled_fn=lambda: self.app.save.has_progress(),
                 ),
                 MenuItem(
                     lambda: tr("menu_new_game", self.app.language), self._new_game
@@ -40,13 +41,26 @@ class MainMenuScene(Scene):
         return "%s: %s" % (tr("menu_language", self.app.language), name)
 
     def _toggle_language(self):
-        self.app.language = "ru" if self.app.language == "en" else "en"
+        self.app.set_language("ru" if self.app.language == "en" else "en")
 
     def _new_game(self):
+        """Новая игра. При наличии прогресса - подтверждение (затрёт прогресс)."""
+        if self.app.save.has_progress():
+            self.app.push_scene(
+                ConfirmScene(self.app, "confirm_new_game", self._start_fresh)
+            )
+        else:
+            self._start_fresh()
+
+    def _start_fresh(self):
+        """Начать с первого уровня, записав прогресс."""
+        self.app.save.set_progress(1)
+        self.app.persist()
         self.app.replace_scene(GameplayScene(self.app))
 
     def _continue(self):
-        pass  # шаг 5: загрузка прогресса
+        """Продолжить с сохранённого прогресса."""
+        self.app.replace_scene(GameplayScene(self.app))
 
     def handle_events(self, events):
         for event in events:
