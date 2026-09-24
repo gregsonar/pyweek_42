@@ -27,7 +27,7 @@ class Interactable:
 
     def __init__(self, x, y, states, angle=0.0, width=1.0, interact_radius=None,
                  height=1.0, y_offset=0.0, cyclic=True, highlight_sprite=None,
-                 block_radius=None):
+                 block_radius=None, billboard=False):
         self.x = x
         self.y = y
         self.states = states
@@ -35,9 +35,13 @@ class Interactable:
         # Радиус блокировки прохода (если solid). None -> config.OBJECT_BLOCK_RADIUS.
         # Для крупных объектов задаётся больше, чтобы игрок не влезал в спрайт.
         self.block_radius = block_radius
-        # Ориентация плоской поверхности: angle - направление её касательной
-        # (вдоль какой оси она вытянута), width - ширина в мировых единицах.
-        # Поверхность неподвижна в пространстве и не поворачивается за игроком.
+        # Ориентация поверхности:
+        #   billboard=False (по умолчанию) - плоская поверхность, зафиксированная
+        #     в пространстве углом angle (не поворачивается за игроком);
+        #   billboard=True - плоскость всегда параллельна экрану (лицом к игроку),
+        #     angle игнорируется. Для мебели/декора обычно нужен билборд, для
+        #     настенных объектов (кнопки/двери) - фиксированный.
+        self.billboard = billboard
         self.angle = angle
         self.width = width
         self.interact_radius = (interact_radius if interact_radius is not None

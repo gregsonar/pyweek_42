@@ -396,9 +396,14 @@ class Renderer:
                 mult = config.HIGHLIGHT_BRIGHTNESS if is_high else 1.0
             tex_w, tex_h = sprite.shape[0], sprite.shape[1]
 
-            # Концы отрезка поверхности в мировых координатах
+            # Концы отрезка поверхности в мировых координатах. Направление
+            # касательной: билборд - "право" камеры (плоскость параллельна экрану,
+            # лицом к игроку); иначе - фиксированный угол объекта.
             half = obj.width / 2.0
-            tx, ty = math.cos(obj.angle), math.sin(obj.angle)
+            if getattr(obj, "billboard", False):
+                tx, ty = -math.sin(pa), math.cos(pa)
+            else:
+                tx, ty = math.cos(obj.angle), math.sin(obj.angle)
             ax, ay = obj.x - half * tx, obj.y - half * ty  # точка A
             ex, ey = obj.width * tx, obj.width * ty          # вектор A->B
 

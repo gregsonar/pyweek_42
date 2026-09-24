@@ -242,6 +242,7 @@ class GameplayScene(Scene):
                 height=spec.get("height", 1.0),
                 y_offset=spec.get("y_offset", 0.0),
                 cyclic=spec.get("cyclic", True),
+                billboard=spec.get("billboard", False),
             )
             if kind == "door":
                 obj = Interactable(
@@ -274,12 +275,15 @@ class GameplayScene(Scene):
     def _load_props(self, table):
         """Строит декор-пропсы из таблицы.
 
-        Запись: (file, w, h, x, y, y_offset, solid, block_radius). file - путь
-        относительно assets/textures/. Сторона билборда = max(w, h).
-        block_radius=None -> дефолт config.OBJECT_BLOCK_RADIUS.
+        Запись: (file, w, h, x, y, y_offset, solid, block_radius[, billboard]).
+        file - путь относительно assets/textures/. Сторона квадрата = max(w, h).
+        block_radius=None -> дефолт config.OBJECT_BLOCK_RADIUS. billboard
+        (опционально, по умолч. False) -> спрайт всегда лицом к игроку.
         """
         props = []
-        for file, w, h, x, y, y_offset, solid, block_radius in table:
+        for entry in table:
+            file, w, h, x, y, y_offset, solid, block_radius = entry[:8]
+            billboard = entry[8] if len(entry) > 8 else False
             spr = load_sprite("assets/textures/" + file)
             side = max(w, h)
             props.append(
@@ -292,6 +296,7 @@ class GameplayScene(Scene):
                     height=side,
                     y_offset=y_offset,
                     block_radius=block_radius,
+                    billboard=billboard,
                 )
             )
         return props
