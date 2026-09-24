@@ -11,6 +11,7 @@ import math
 import pygame as pg
 
 from . import config
+from .fonts import load_font
 from .i18n import tr
 
 
@@ -20,16 +21,14 @@ class Hud:
     def __init__(self, language):
         self.language = language
 
-        # Шрифты. Текст и таймер - шрифт с кириллицей (для русского языка).
-        # Иконки HP - отдельный символьный шрифт с глифами ♥/♡ (в кириллических
-        # шрифтах этих символов обычно нет). Списки запасных - в config.
-        self.font_timer = pg.font.SysFont(
-            config.HUD_FONT_NAME, config.HUD_TIMER_SIZE, bold=True
+        # Игровой шрифт (HomeVideo) для таймера и текста. Иконки HP - отдельный
+        # символьный шрифт с настоящими ♥/♡ (в HomeVideo их нет); это временно,
+        # до замены HP на реальные иконки.
+        self.font_timer = load_font(config.HUD_TIMER_SIZE)
+        self.font_text = load_font(config.HUD_TEXT_SIZE)
+        self.font_hp = pg.font.SysFont(
+            config.HUD_SYMBOL_FONT_NAME, config.HUD_HP_SIZE
         )
-        self.font_text = pg.font.SysFont(
-            config.HUD_FONT_NAME, config.HUD_TEXT_SIZE, bold=True
-        )
-        self.font_hp = pg.font.SysFont(config.HUD_SYMBOL_FONT_NAME, config.HUD_HP_SIZE)
 
         # Полноэкранные поверхности масок (переиспользуются между кадрами):
         # красная - урон, синяя - заморозка игрока (возврат долга)

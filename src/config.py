@@ -76,11 +76,15 @@ LANGUAGE = "en"
 # Лимит времени на попытку по умолчанию (сек) - см. Level.time_limit.
 LEVEL_TIME_LIMIT = 90.0
 
+# Игровой шрифт (HomeVideo) - для HUD и всех экранов. Покрывает цифры, латиницу
+# и кириллицу. При сбое загрузки файла - системный фолбэк.
+FONT_PATH = "assets/fonts/HomeVideo-Regular.ttf"
+HUD_FONT_FALLBACK = "segoeui,dejavusans,arial"
+# Символьный шрифт только для плейсхолдеров HP (♥/♡): в HomeVideo этих глифов
+# нет (рисуется "тофу"). Уйдёт, когда HP заменим на реальные иконки.
+HUD_SYMBOL_FONT_NAME = "segoeuisymbol,dejavusans,arial"
+
 # HUD (интерфейс поверх сцены; рисуется в разрешении окна после масштаба)
-# Текст/таймер - шрифт с кириллицей (для русского); иконки HP - символьный
-# шрифт с глифами ♥/♡ (в кириллических шрифтах их обычно нет).
-HUD_FONT_NAME = "segoeui,tahoma,dejavusans,arial"  # текст и таймер (нужна кириллица)
-HUD_SYMBOL_FONT_NAME = "segoeuisymbol,dejavusans,arial"  # иконки HP (нужны ♥/♡)
 HUD_TIMER_SIZE = 40  # кегль шрифта таймера (верх по центру)
 HUD_TEXT_SIZE = 24  # кегль шрифта строки текста (верх справа)
 HUD_HP_SIZE = 34  # кегль шрифта иконок здоровья (низ слева)

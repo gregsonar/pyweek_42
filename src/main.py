@@ -1,33 +1,32 @@
 # src/main.py
-"""Основной цикл игры: ввод, обновление, отрисовка."""
+"""Игровая сцена: ввод, обновление и отрисовка игрового процесса."""
 
 import random
 
 import numpy as np
 import pygame as pg
 
-from src.i18n import has, tr
-
 from . import config
+from .app import App
 from .entities import Spark
 from .hud import Hud
+from .i18n import has
 from .interactables import Interactable, InteractState, select_highlight
 from .placeholder_sprites import button_states
 from .renderer import Renderer
+from .scene import Scene
 from .timing import TimeController, Timer
 from .traps import Trap
 from .utils import desaturate, load_sprite, load_texture, load_textures
 
 
-class Game:
-    """Основной класс игры."""
+class GameplayScene(Scene):
+    """Игровой процесс: рендер сцены, движение игрока, время, ловушки, HUD."""
 
-    def __init__(self):
-        pg.init()
-        self.screen = pg.display.set_mode((config.WIN_WIDTH, config.WIN_HEIGHT))
-        pg.display.set_caption("Raycast Pygame Renderer")
-        pg.mouse.set_visible(False)
-        pg.event.set_grab(True)
+    wants_mouse_grab = True  # игра захватывает мышь и прячет курсор
+
+    def __init__(self, app):
+        super().__init__(app)
 
         # Виртуальный буфер (низкое разрешение для ретро-эффекта)
         self.virt_surf = pg.Surface((config.VIRT_WIDTH, config.VIRT_HEIGHT))
@@ -67,9 +66,8 @@ class Game:
         }
         textures = load_textures(texture_paths)
 
-        # Локализация интерфейса и HUD (создаётся после pg.init - шрифты готовы)
-        self.language = config.LANGUAGE
-        self.hud = Hud(self.language)
+        # HUD (шрифты готовы - pygame инициализирован в App). Язык хранит App.
+        self.hud = Hud(self.app.language)
 
         # Данные уровня (карты, старт, режим верха) в одном объекте
         level = config.DEFAULT_LEVEL
@@ -86,6 +84,7 @@ class Game:
         self.focus = config.VIGNETTE  # фокусное расстояние / виньетка
         self.brightness = config.BASE_BRIGHTNESS  # яркость
         self.rays_intensity = 0.0  # интенсивность god rays
+        self._is_firing = False  # зажата ли ЛКМ (для god rays/искр в draw)
 
         # Частицы
         self.sparks = [Spark() for _ in range(config.SPARK_COUNT)]
@@ -122,16 +121,17 @@ class Game:
         self._time_limit_ticks = round(level.time_limit * config.TICK_RATE)
         self.time_left_ticks = self._time_limit_ticks
 
-        self.clock = pg.time.Clock()
-        self.running = True
-
         # Вводное сообщение уровня (только при первом входе)
         self._show_level_intro()
+
+    def on_enter(self):
+        """Сброс накопленной дельты мыши, чтобы камера не прыгнула при входе."""
+        pg.mouse.get_rel()
 
     def _show_level_intro(self):
         """Показать вводное сообщение уровня, если оно задано в i18n."""
         key = "level_%d_msg" % self.level_number
-        if has(key, self.language):
+        if has(key, self.app.language):
             self.hud.set_message(key, seconds=config.LEVEL_MSG_SECONDS)
 
     def _build_interactables(self):
@@ -227,27 +227,25 @@ class Game:
         """Может ли игрок двигаться/поворачиваться/взаимодействовать/жать F."""
         return self.time_ctrl.player_running and self._stun_ticks <= 0
 
-    def handle_input(self, dt):
-        """Обработка ввода: события и клавиши. dt — время кадра в секундах."""
+    def handle_events(self, events):
+        """Дискретные события кадра: E (использовать), L (язык), F (заём), Esc."""
         # Флаг использования сбрасывается каждый кадр и выставляется по нажатию
         self.interact_pressed = False
-        for event in pg.event.get():
-            if event.type == pg.QUIT:
-                self.running = False
-            if event.type == pg.KEYDOWN and event.key == pg.K_ESCAPE:
-                self.running = False
-            # Использование объекта - по нажатию (одно срабатывание на нажатие)
-            if event.type == pg.KEYDOWN and event.key == pg.K_e:
+        for event in events:
+            if event.type != pg.KEYDOWN:
+                continue
+            if event.key == pg.K_ESCAPE:
+                self.app.quit()  # шаг 1: Esc пока выходит (дальше - пауза)
+            elif event.key == pg.K_e:
                 self.interact_pressed = True
-            # Переключение языка интерфейса (en/ru)
-            if event.type == pg.KEYDOWN and event.key == pg.K_l:
-                self.language = "ru" if self.language == "en" else "en"
-                self.hud.set_language(self.language)
-            # Способность заёма времени: остановка мира (тоггл)
-            if event.type == pg.KEYDOWN and event.key == pg.K_f and self.player_can_act:
+            elif event.key == pg.K_l:
+                self.app.language = "ru" if self.app.language == "en" else "en"
+                self.hud.set_language(self.app.language)
+            elif event.key == pg.K_f and self.player_can_act:
                 self.time_ctrl.toggle_freeze()
 
-        # Управление фокусом (ЛКМ)
+    def _update_input(self, dt):
+        """Непрерывный ввод: ЛКМ (фокус), поворот мышью, движение. -> is_firing."""
         is_firing = pg.mouse.get_pressed()[0]
         target_focus = 280.0 if is_firing else config.VIGNETTE
         target_bright = 15.0 if is_firing else config.BASE_BRIGHTNESS
@@ -311,6 +309,26 @@ class Game:
 
         return is_firing
 
+    def update(self, dt):
+        """Кадр логики: ввод, фиксированные тики (время/мир/урон), HUD, выбор."""
+        is_firing = self._update_input(dt)
+
+        # Шаги логики времени (фиксированный тик): механика заёма/возврата и
+        # мир (ловушки) - при world_running; урон - каждый тик
+        for _ in range(self.timer.update(dt)):
+            if self._stun_ticks > 0:
+                self._stun_ticks -= 1
+            self.time_ctrl.step()
+            if self.time_ctrl.world_running:
+                self.world_step()
+            # Урон от активных ловушек - каждый тик, независимо от остановки мира:
+            # включённая ловушка опасна и в замороженном состоянии
+            self._apply_trap_damage()
+
+        self.hud.update(dt, player_frozen=not self.time_ctrl.player_running)
+        self.update_interaction()
+        self._is_firing = is_firing
+
     def update_particles(self, is_firing, hit_info):
         """Обновление и отрисовка частиц."""
         # Спавн искр при "сварке"
@@ -361,8 +379,8 @@ class Game:
                             (screen_x, screen_y, size, size),
                         )
 
-    def render(self, is_firing):
-        """Полный цикл рендеринга кадра."""
+    def draw(self, screen):
+        """Полный цикл рендеринга кадра на screen (без flip - им занят App)."""
         # Буферы (переиспользуем кадровый буфер, пол/потолок перезапишут всё)
         frame = self._frame
         frame.fill(0.0)
@@ -404,17 +422,17 @@ class Game:
         self.virt_surf.blit(self.rays_surf, (0, 0))
 
         # 6. Частицы
-        self.update_particles(is_firing, hit_info)
+        self.update_particles(self._is_firing, hit_info)
 
         # 7. Масштабирование на полный экран
-        self.screen.blit(
+        screen.blit(
             pg.transform.scale(self.virt_surf, (config.WIN_WIDTH, config.WIN_HEIGHT)),
             (0, 0),
         )
 
         # 8. HUD поверх масштабированной сцены (в разрешении окна)
         self.hud.draw(
-            self.screen,
+            screen,
             time_left=self.time_left_ticks / config.TICK_RATE,
             hp=self.hp,
             max_hp=config.PLAYER_MAX_HP,
@@ -422,8 +440,6 @@ class Game:
             world_frozen=not self.time_ctrl.world_running,
             budget_fraction=self.time_ctrl.budget_fraction,
         )
-
-        pg.display.flip()
 
     def update_interaction(self):
         """Выбор подсвеченного объекта и его использование по нажатию E."""
@@ -447,7 +463,7 @@ class Game:
         Вызывается только при world_running, поэтому отсчёт времени попытки и
         переключение ловушек вкл/выкл стоят, пока игрок держит мир остановленным.
         Урон от активных ловушек применяется отдельно (см. _apply_trap_damage в
-        главном цикле) - каждый тик, чтобы включённая на момент остановки времени
+        update) - каждый тик, чтобы включённая на момент остановки времени
         ловушка оставалась опасной и при замороженном мире.
         """
         # Обратный отсчёт времени попытки; при исчерпании - рестарт
@@ -522,32 +538,9 @@ class Game:
         # TODO: при смерти/рестарте показывать отдельное сообщение (не вводное) -
         # реализуем позже; вводное сообщение уровня здесь намеренно не повторяем
 
-    def run(self):
-        """Главный цикл игры."""
-        while self.running:
-            # Ограничиваем шаг кадра сверху: при лаге dt не должен позволять
-            # проскочить сквозь стену (см. коллизию в handle_input)
-            dt = min(self.clock.tick(config.FPS) / 1000.0, config.MAX_DT)
-            is_firing = self.handle_input(dt)
-            # Шаги логики времени (фиксированный тик): механика заёма/возврата и
-            # мир (ловушки/урон) - при world_running
-            for _ in range(self.timer.update(dt)):
-                if self._stun_ticks > 0:
-                    self._stun_ticks -= 1
-                self.time_ctrl.step()
-                if self.time_ctrl.world_running:
-                    self.world_step()
-                # Урон от активных ловушек - каждый тик, независимо от остановки
-                # мира: включённая ловушка опасна и в замороженном состоянии
-                self._apply_trap_damage()
-            self.hud.update(dt, player_frozen=not self.time_ctrl.player_running)
-            self.update_interaction()
-            self.render(is_firing)
-
-        pg.quit()
-
 
 def run_engine():
-    """Точка входа для запуска извне."""
-    game = Game()
-    game.run()
+    """Точка входа: запустить приложение с игровой сценой."""
+    app = App()
+    app.push_scene(GameplayScene(app))
+    app.run()
