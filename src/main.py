@@ -306,17 +306,19 @@ class GameplayScene(Scene):
         return self._load_traps(config.TRAPS)
 
     def _load_traps(self, table):
-        """Строит ловушки из таблицы: (x, y, on_ticks, off_ticks, start_active).
+        """Строит ловушки из таблицы: (x, y, intervals_ms, start_active).
 
-        Текстуры ловушки (активная + обесцвеченная пассивная) - на стороне игры.
+        intervals_ms - список длительностей фаз в мс (чередуются вкл/выкл от
+        start_active, зациклено). Текстуры ловушки (активная + обесцвеченная
+        пассивная) - на стороне игры.
         """
         tex_on = load_texture("assets/textures/flats/floor_trap_enabled.png")
         tex_off = desaturate(
             tex_on, amount=config.TRAP_OFF_DESATURATE, dim=config.TRAP_OFF_DIM
         )
         return [
-            Trap(x, y, tex_on, tex_off, on, off, start_active=active)
-            for (x, y, on, off, active) in table
+            Trap(x, y, tex_on, tex_off, intervals_ms, start_active=active)
+            for (x, y, intervals_ms, active) in table
         ]
 
     @property

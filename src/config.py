@@ -263,8 +263,11 @@ INTERACTABLES = [
      "closed": "sprites/spr_door2_closed-exit.png"},
 ]
 
-# TRAPS: (x, y, on_ticks, off_ticks, start_active). Текстуры ловушек - в коде.
+# TRAPS: (x, y, intervals_ms, start_active). intervals_ms - список длительностей
+# фаз в миллисекундах: фазы чередуются вкл/выкл начиная со start_active, список
+# зациклен. Пример: [2000,1000,3500,2000] при True = 2с вкл,1с выкл,3.5с вкл,2с
+# выкл, повтор. Текстуры ловушек - на стороне игры.
 TRAPS = [
-    (6, 3, 90, 90, True),
-    (3, 8, 60, 120, False),
+    (6, 3, [1500, 1500], True),
+    (3, 8, [2000, 1000], False),
 ]
