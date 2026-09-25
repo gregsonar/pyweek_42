@@ -30,8 +30,10 @@ class GameplayScene(Scene):
 
     wants_mouse_grab = True  # игра захватывает мышь и прячет курсор
 
-    def __init__(self, app):
+    def __init__(self, app, level_index=0):
         super().__init__(app)
+        self.level_index = level_index
+        self._level = config.LEVELS[level_index]  # данные текущего уровня
 
         # Виртуальный буфер (низкое разрешение для ретро-эффекта)
         self.virt_surf = pg.Surface((config.VIRT_WIDTH, config.VIRT_HEIGHT))
@@ -74,11 +76,11 @@ class GameplayScene(Scene):
         textures = load_textures(texture_paths)
 
         # Кастомные тайлы пола по клеткам: (строка, столбец) -> текстура.
-        # Строятся из config.FLOOR_OVERRIDES (ключ текстуры -> массив). Клетки
+        # Строятся из floor_overrides уровня (ключ текстуры -> массив). Клетки
         # с неизвестным ключом пропускаем.
         self._floor_overrides = {
             cell: textures[key]
-            for cell, key in config.FLOOR_OVERRIDES.items()
+            for cell, key in self._level.floor_overrides.items()
             if key in textures
         }
 
@@ -86,7 +88,7 @@ class GameplayScene(Scene):
         self.hud = Hud(self.app.language)
 
         # Данные уровня (карты, старт, режим верха) в одном объекте
-        level = config.DEFAULT_LEVEL
+        level = self._level
 
         # Инициализация рендерера (нижний и верхний пояс стен, режим верха)
         self.renderer = Renderer(
@@ -105,7 +107,9 @@ class GameplayScene(Scene):
         # Частицы
         self.sparks = [Spark() for _ in range(config.SPARK_COUNT)]
 
-        # Интерактивные объекты (пока с заглушками-спрайтами)
+        # Интерактивные объекты из дата-таблицы уровня (кнопки/двери/выход).
+        # _load_interactables выставляет self.exit_door, linked_doors, button_links.
+        self.exit_door = None
         self.interactables = self._build_interactables()
         self.highlighted = None  # текущий подсвеченный объект
         self.interact_pressed = False  # флаг нажатия клавиши использования
@@ -146,17 +150,35 @@ class GameplayScene(Scene):
         pg.mouse.get_rel()
 
     def _win(self):
-        """Завершение уровня -> экран победы (с фейдом).
+        """Завершение уровня. Не последний -> межуровневый экран и следующий
+        уровень; последний -> экран победы. Оба перехода с фейдом.
 
         Основной триггер - дверь-выход (E, см. update_interaction). F10 оставлен
         временно как дев-шорткат (потом убрать или вынести в чит-режим).
-        Фиксируем время добега до двери от старта уровня (без экранного сообщения).
+        Фиксируем время добега до двери от старта уровня.
         """
-        from .victory import VictoryScene
-
         self.completion_time = self.timer.seconds
-        print("level complete in %.2f s" % self.completion_time, flush=True)
-        self.app.fade_to(VictoryScene(self.app))
+        print(
+            "level %d complete in %.2f s"
+            % (self._level.number, self.completion_time),
+            flush=True,
+        )
+        next_index = self.level_index + 1
+        if next_index < len(config.LEVELS):
+            # разблокировать следующий уровень (для «Продолжить») и показать экран
+            self.app.save.set_progress(config.LEVELS[next_index].number)
+            self.app.persist()
+            from .levelcomplete import LevelCompleteScene
+
+            self.app.fade_to(
+                LevelCompleteScene(
+                    self.app, self._level.number, self.completion_time, next_index
+                )
+            )
+        else:
+            from .victory import VictoryScene
+
+            self.app.fade_to(VictoryScene(self.app))
 
     def _show_level_intro(self):
         """Показать вводное сообщение уровня, если оно задано в i18n."""
@@ -165,78 +187,35 @@ class GameplayScene(Scene):
             self.hud.set_message(key, seconds=config.LEVEL_MSG_SECONDS)
 
     def _build_interactables(self):
-        """Интерактивные объекты: из дата-таблицы (двери/выход) + игровые в коде.
+        """Интерактивные объекты уровня из дата-таблицы (совместимо с дизайнером).
 
-        Двери и выход грузятся из config.INTERACTABLES (совместимо с дизайнером
-        уровней) через _load_interactables (он же ставит self.exit_door). Кнопку
-        и управляемую ею запираемую дверь редактор пока не расставляет - они
-        собираются здесь и связываются ButtonLink. Чтобы добавить связь на новом
-        уровне - создать дверь, добавить в self.linked_doors и завести ButtonLink.
+        _load_interactables строит кнопки/двери/выход, заполняет self.exit_door,
+        self.linked_doors и self.button_links. Возвращает список E-объектов.
         """
-        data_objs = self._load_interactables(config.INTERACTABLES)
-
-        # Игровые объекты в коде: кнопка + запираемая дверь + связь.
-        btn = button_states()  # кнопка пока на заглушке
-        door_closed = load_sprite("assets/textures/sprites/spr_door1_closed.png")
-        door_open = load_sprite("assets/textures/sprites/spr_door1_open.png")
-        # Текстура ЗАПЕРТОЙ двери (связь есть, кнопка не нажата, выключенное сост.)
-        door_locked = load_sprite("assets/textures/sprites/spr_door1_closed_off.png")
-
-        # Кнопка (E циклит: 0 красная -> 1 зелёная). На северной грани перегородки.
-        button = Interactable(
-            5.0,
-            4.6,
-            [InteractState(btn[0]), InteractState(btn[1])],
-            angle=0.0,
-            width=0.5,
-            height=0.5,
-            y_offset=0.35,
-            cyclic=True,
-        )
-
-        # Межкомнатная дверь в проёме перегородки. Управляется кнопкой: кнопка
-        # РАЗБЛОКИРУЕТ дверь, а открывает её игрок по E у самой двери.
-        # Состояния: 0 заперта (locked-текстура, solid, не по E), 1 закрыта но
-        # разблокирована (solid, открывается по E), 2 открыта (не solid).
-        # block_radius больше стандартного, чтобы закрытую нельзя было
-        # проскользнуть по краю.
-        partition_door = Interactable(
-            6.5,
-            5.5,
-            [
-                InteractState(door_locked, solid=True),
-                InteractState(door_closed, solid=True),
-                InteractState(door_open, solid=False),
-            ],
-            angle=0.0,
-            width=1.0,
-            height=1.0,
-            y_offset=0.0,
-            cyclic=False,
-            block_radius=config.OBJECT_BLOCK_RADIUS + 0.2,
-        )
-
-        # Двери под управлением кнопок (рендер+коллизия, но не по E) и их связи.
-        self.linked_doors = [partition_door]
-        self.button_links = [
-            ButtonLink(button, [partition_door], open_state=1),
-        ]
-
-        return [button] + data_objs
+        return self._load_interactables(self._level.interactables)
 
     def _load_interactables(self, table):
-        """Строит интерактивные объекты из дата-таблицы (совместимо с дизайнером).
+        """Строит интерактивные объекты из дата-таблицы.
 
-        kind "door" -> [закрыта(solid), открыта(не solid)]; kind "exit" ->
-        [закрыта(solid)], cyclic=False, запоминается как self.exit_door (по E -
-        завершает уровень), радиус срабатывания вдвое меньше обычного. Пути к
-        спрайтам - относительно assets/textures/.
+        Виды (kind):
+          "button" (id для ссылок) - кнопка, E циклит состояния (0 красн., 1 зел.);
+          "locked_door" (button=id управляющей кнопки; файлы locked/closed/open) -
+            запираемая дверь: кнопка разблокирует, E у двери открывает. Идёт в
+            self.linked_doors + связь self.button_links;
+          "door" (closed/open) - простая дверь, E переключает;
+          "exit" (closed) - по E завершает уровень (self.exit_door), радиус
+            срабатывания вдвое меньше.
+        Пути к спрайтам - относительно assets/textures/. Возвращает E-объекты
+        (кнопки, простые двери, выход); запираемые двери - в self.linked_doors.
         """
         pref = "assets/textures/"
         objs = []
-        for spec in table:
-            kind = spec["kind"]
-            common = dict(
+        self.linked_doors = []
+        self.button_links = []
+        buttons = {}
+
+        def common(spec):
+            return dict(
                 angle=spec.get("angle", 0.0),
                 width=spec.get("width", 1.0),
                 height=spec.get("height", 1.0),
@@ -244,33 +223,58 @@ class GameplayScene(Scene):
                 cyclic=spec.get("cyclic", True),
                 billboard=spec.get("billboard", False),
             )
-            if kind == "door":
-                obj = Interactable(
-                    spec["x"],
-                    spec["y"],
+
+        # Кнопки - первым проходом (двери ссылаются на них по id)
+        for spec in table:
+            if spec.get("kind") == "button":
+                buttons[spec.get("id")] = Interactable(
+                    spec["x"], spec["y"],
+                    [InteractState(s) for s in button_states()],
+                    **common(spec),
+                )
+
+        for spec in table:
+            kind = spec["kind"]
+            if kind == "button":
+                objs.append(buttons[spec.get("id")])
+            elif kind == "door":
+                objs.append(Interactable(
+                    spec["x"], spec["y"],
                     [
                         InteractState(load_sprite(pref + spec["closed"]), solid=True),
                         InteractState(load_sprite(pref + spec["open"]), solid=False),
                     ],
-                    **common,
+                    **common(spec),
+                ))
+            elif kind == "locked_door":
+                door = Interactable(
+                    spec["x"], spec["y"],
+                    [
+                        InteractState(load_sprite(pref + spec["locked"]), solid=True),
+                        InteractState(load_sprite(pref + spec["closed"]), solid=True),
+                        InteractState(load_sprite(pref + spec["open"]), solid=False),
+                    ],
+                    block_radius=spec.get("block_radius"),
+                    **common(spec),
+                )
+                self.linked_doors.append(door)
+                self.button_links.append(
+                    ButtonLink(buttons[spec["button"]], [door], open_state=1)
                 )
             elif kind == "exit":
                 obj = Interactable(
-                    spec["x"],
-                    spec["y"],
+                    spec["x"], spec["y"],
                     [InteractState(load_sprite(pref + spec["closed"]), solid=True)],
                     interact_radius=config.INTERACT_RADIUS * 0.5,
-                    **common,
+                    **common(spec),
                 )
                 self.exit_door = obj
-            else:
-                continue  # неизвестный kind - пропускаем
-            objs.append(obj)
+                objs.append(obj)
         return objs
 
     def _build_props(self):
-        """Декор из дата-таблицы config.PROPS (совместимо с дизайнером уровней)."""
-        return self._load_props(config.PROPS)
+        """Декор из дата-таблицы уровня (совместимо с дизайнером уровней)."""
+        return self._load_props(self._level.props)
 
     def _load_props(self, table):
         """Строит декор-пропсы из таблицы.
@@ -302,8 +306,8 @@ class GameplayScene(Scene):
         return props
 
     def _build_traps(self):
-        """Ловушки из дата-таблицы config.TRAPS (совместимо с дизайнером уровней)."""
-        return self._load_traps(config.TRAPS)
+        """Ловушки из дата-таблицы уровня (совместимо с дизайнером уровней)."""
+        return self._load_traps(self._level.traps)
 
     def _load_traps(self, table):
         """Строит ловушки из таблицы: (x, y, intervals_ms, start_active).
@@ -667,7 +671,7 @@ class GameplayScene(Scene):
 
     def reset_level(self):
         """Полный мягкий сброс уровня (при проигрыше)."""
-        level = config.DEFAULT_LEVEL
+        level = self._level
         self.player = level.player_start.copy()
         self.hp = config.PLAYER_MAX_HP
         self._trap_contact_cell = None

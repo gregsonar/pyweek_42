@@ -63,11 +63,13 @@ class MainMenuScene(Scene):
         """Начать с первого уровня, записав прогресс."""
         self.app.save.set_progress(1)
         self.app.persist()
-        self.app.fade_to(GameplayScene(self.app))
+        self.app.fade_to(GameplayScene(self.app, 0))
 
     def _continue(self):
-        """Продолжить с сохранённого прогресса."""
-        self.app.fade_to(GameplayScene(self.app))
+        """Продолжить с сохранённого уровня (прогресс - номер уровня, с 1)."""
+        index = (self.app.save.progress_level or 1) - 1
+        index = max(0, min(index, len(config.LEVELS) - 1))
+        self.app.fade_to(GameplayScene(self.app, index))
 
     def handle_events(self, events):
         for event in events:

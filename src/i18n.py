@@ -32,6 +32,9 @@ STRINGS = {
         "victory_title": "Level Complete",
         "victory_menu": "Main Menu",
         "victory_credits": "Credits",
+        "level_complete_title": "Level {n} Complete",
+        "level_complete_time": "Time: {t}",
+        "level_complete_next": "Next",
     },
     "ru": {
         "level": "Уровень {n}",
@@ -58,6 +61,9 @@ STRINGS = {
         "victory_title": "Уровень пройден",
         "victory_menu": "В главное меню",
         "victory_credits": "Титры",
+        "level_complete_title": "Уровень {n} пройден",
+        "level_complete_time": "Время: {t}",
+        "level_complete_next": "Дальше",
     },
 }
 

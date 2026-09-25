@@ -4,6 +4,7 @@
 import math
 
 from .level import Level
+from .maze import generate_maze
 
 # Разрешения
 VIRT_WIDTH = 320
@@ -226,25 +227,13 @@ def _build_upper_map(lower):
 DEFAULT_MAP_UPPER = _build_upper_map(DEFAULT_MAP)
 
 
-# Уровень по умолчанию: карты + старт игрока + режим верха (потолок/небо).
-DEFAULT_LEVEL = Level(
-    lower_map=DEFAULT_MAP,
-    upper_map=DEFAULT_MAP_UPPER,
-    player_start=PLAYER_START,
-    sky_mode=False,  # небо (параллакс); поставь False для потолка
-    time_limit=LEVEL_TIME_LIMIT,
-    number=1,
-)
-
-
-# --- Объекты уровня: дата-таблицы (совместимо с дизайнером уровней) ---
+# --- Объекты уровня 1: дата-таблицы (совместимо с дизайнером уровней) ---
 # Загрузчики - в GameplayScene (_load_props / _load_interactables / _load_traps).
 # Пути к спрайтам - относительно assets/textures/ (например "sprites/window.png").
-# Кнопку и запираемую (управляемую кнопкой) дверь редактор пока не расставляет -
-# они остаются в коде игры (_build_interactables).
 
-# PROPS: (file, w, h, x, y, y_offset, solid, block_radius).
-# Сторона билборда = max(w, h). block_radius=None -> дефолт OBJECT_BLOCK_RADIUS.
+# PROPS: (file, w, h, x, y, y_offset, solid, block_radius[, billboard]).
+# Сторона квадрата = max(w, h). block_radius=None -> дефолт OBJECT_BLOCK_RADIUS.
+# billboard (опц.) -> спрайт всегда лицом к игроку.
 PROPS = [
     ("sprites/spr_plant.png", 0.62, 0.85, 10.5, 1.6, 0.0, False, None),
     ("sprites/spr_plant.png", 0.62, 0.85, 7.5, 1.6, 0.0, False, None),
@@ -256,8 +245,17 @@ PROPS = [
 ]
 
 # INTERACTABLES: {kind, x, y, angle, width, height, y_offset, cyclic, <файлы>}.
-# kind "door" -> файлы "closed"/"open"; kind "exit" -> "closed" (по E - выход).
+# kind: "button" (кнопка, id для ссылок), "locked_door" (запираемая, button=id
+# управляющей кнопки; файлы locked/closed/open), "door" (closed/open), "exit"
+# (closed - по E завершает уровень).
 INTERACTABLES = [
+    {"kind": "button", "id": "b1", "x": 5.0, "y": 4.6, "angle": 0.0,
+     "width": 0.5, "height": 0.5, "y_offset": 0.35, "cyclic": True},
+    {"kind": "locked_door", "button": "b1", "x": 6.5, "y": 5.5, "angle": 0.0,
+     "width": 1, "height": 1, "y_offset": 0.0, "block_radius": 0.55,
+     "locked": "sprites/spr_door1_closed_off.png",
+     "closed": "sprites/spr_door1_closed.png",
+     "open": "sprites/spr_door1_open.png"},
     {"kind": "exit", "x": 8.5, "y": 9.99, "angle": math.pi,
      "width": 1, "height": 1, "y_offset": 0.0, "cyclic": False,
      "closed": "sprites/spr_door2_closed-exit.png"},
@@ -271,3 +269,48 @@ TRAPS = [
     (6, 3, [1500, 1500], True),
     (3, 8, [2000, 1000], False),
 ]
+
+
+# Уровень 1: карты + старт + объекты (дата-таблицы выше).
+LEVEL1 = Level(
+    lower_map=DEFAULT_MAP,
+    upper_map=DEFAULT_MAP_UPPER,
+    player_start=PLAYER_START,
+    sky_mode=False,  # True - небо (параллакс); False - потолок
+    time_limit=LEVEL_TIME_LIMIT,
+    number=1,
+    props=PROPS,
+    interactables=INTERACTABLES,
+    traps=TRAPS,
+    floor_overrides=FLOOR_OVERRIDES,
+)
+
+
+# Уровень 2: лабиринт (рекурсивный бэктрекинг), >=15 клеток по длинной стороне,
+# с тупиками. Старт в углу (0,0), выход - в дальнем углу; одна ловушка в проходе
+# для примера. Сид фиксирован, чтобы уровень был стабильным.
+_MAZE_GRID, _MAZE_START, _MAZE_ANGLE, _MAZE_EXIT = generate_maze(
+    cw=9, ch=7, seed=42, wall_id=1
+)
+LEVEL2 = Level(
+    lower_map=_MAZE_GRID,
+    upper_map=_build_upper_map(_MAZE_GRID),
+    player_start={"x": _MAZE_START[0], "y": _MAZE_START[1], "angle": _MAZE_ANGLE},
+    sky_mode=False,
+    time_limit=120.0,
+    number=2,
+    props=[],
+    interactables=[
+        # Выход - билборд (всегда лицом к игроку): удобно в лабиринте
+        {"kind": "exit", "x": _MAZE_EXIT[0], "y": _MAZE_EXIT[1], "billboard": True,
+         "width": 1, "height": 1, "y_offset": 0.0, "cyclic": False,
+         "closed": "sprites/spr_door2_closed-exit.png"},
+    ],
+    traps=[(5, 3, [1500, 1500], True)],
+    floor_overrides={},
+)
+
+
+# Список уровней (по порядку прохождения) и алиас на первый.
+LEVELS = [LEVEL1, LEVEL2]
+DEFAULT_LEVEL = LEVEL1
