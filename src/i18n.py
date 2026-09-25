@@ -10,6 +10,7 @@ STRINGS = {
     "en": {
         "level": "Level {n}",
         "level_1_msg": "Everything has a beginning",
+        "level_4_msg": "Watch out for live wires!",
         "time_up": "Time's up!",
         # Меню и экраны
         "game_title": "ChronoKhryshch",
@@ -39,6 +40,7 @@ STRINGS = {
     "ru": {
         "level": "Уровень {n}",
         "level_1_msg": "Всё когда-то начинается",
+        "level_4_msg": "Берегись оголённых проводов!",
         "time_up": "Время вышло!",
         # Меню и экраны
         "game_title": "ХроноХрущ",

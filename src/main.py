@@ -45,28 +45,28 @@ class GameplayScene(Scene):
         # Загрузка ресурсов (id стен 1..15 -> новые тайлы)
         texture_paths = {
             1: "assets/textures/walls/wall_concrete_01.png",
-            2: "assets/textures/walls/wall_concrete_02.png",
-            3: "assets/textures/walls/wall_concrete_moss.png",
-            4: "assets/textures/walls/wall_poster_wizard.png",
-            5: "assets/textures/walls/wall_poster_halftone.png",
-            6: "assets/textures/walls/wall_shelf_farm.png",
+            2: "assets/textures/walls/wall_wires.png",
+            3: "assets/textures/walls/wall_graffiti_01.png",
+            4: "assets/textures/walls/wall_poster_python.png",
+            5: "assets/textures/walls/wall_poster_1.png",
+            6: "assets/textures/walls/wall_graffiti_02.png",
             7: "assets/textures/walls/wall_vent.png",
             8: "assets/textures/walls/wall_terminal.png",
-            9: "assets/textures/walls/wall_console_0.png",
-            10: "assets/textures/walls/wall_console_1.png",
-            11: "assets/textures/walls/wall_window_0.png",
-            12: "assets/textures/walls/wall_window_1.png",
-            13: "assets/textures/walls/wall_window_2.png",
-            14: "assets/textures/walls/wall_window_3.png",
-            15: "assets/textures/walls/wall_window_4.png",
-            16: "assets/textures/walls/wall_window_0_up.png",
-            17: "assets/textures/walls/wall_window_1_up.png",
-            18: "assets/textures/walls/wall_window_2_up.png",
-            19: "assets/textures/walls/wall_window_3_up.png",
-            20: "assets/textures/walls/wall_window_4_up.png",
+            9: "assets/textures/walls/wall_console_01.png",
+            10: "assets/textures/walls/wall_mousehole_01.png",
+            11: "assets/textures/walls/wall_graffiti_03.png",
+            12: "assets/textures/walls/wall_carpet_lower.png",
+            13: "assets/textures/walls/wall_carpet_upper.png",
+            14: "assets/textures/walls/wall_posters.png",
+            15: "assets/textures/walls/wall_bedL_1.png",
+            16: "assets/textures/walls/wall_bedR_1.png",
+            # 17: "assets/textures/walls/wall_window_1_up.png",
+            # 18: "assets/textures/walls/wall_window_2_up.png",
+            # 19: "assets/textures/walls/wall_window_3_up.png",
+            # 20: "assets/textures/walls/wall_window_4_up.png",
             21: "assets/textures/walls/wall_concrete_01_up.png",
-            22: "assets/textures/walls/wall_concrete_02_up.png",
-            23: "assets/textures/walls/wall-outside-window.png",
+            22: "assets/textures/walls/wall_wires_up.png",
+            23: "assets/textures/walls/wall_outside_window.png",
             "floor": "assets/textures/flats/floor_grate.png",
             "floor2": "assets/textures/flats/floor_grate_2.png",  # 2-й вариант пола
             "floor_outside": "assets/textures/flats/outside-window-floor.png",
@@ -148,6 +148,10 @@ class GameplayScene(Scene):
         self.show_debug = False
         self._debug_font = load_font(config.HUD_TEXT_SIZE)
 
+        # Пауза проигрыша (HP=0 / вышло время): держим маску урона, потом рестарт
+        self._failing = False
+        self._fail_left = 0.0  # секунд до рестарта
+
         # Вводное сообщение уровня (только при первом входе)
         self._show_level_intro()
 
@@ -165,8 +169,7 @@ class GameplayScene(Scene):
         """
         self.completion_time = self.timer.seconds
         print(
-            "level %d complete in %.2f s"
-            % (self._level.number, self.completion_time),
+            "level %d complete in %.2f s" % (self._level.number, self.completion_time),
             flush=True,
         )
         next_index = self.level_index + 1
@@ -230,12 +233,21 @@ class GameplayScene(Scene):
                 billboard=spec.get("billboard", False),
             )
 
-        # Кнопки - первым проходом (двери ссылаются на них по id)
+        # Кнопки - первым проходом (двери ссылаются на них по id). Спрайты из
+        # файлов off/on (0 - выкл, 1 - вкл); если не заданы - заглушка.
         for spec in table:
             if spec.get("kind") == "button":
+                if "off" in spec and "on" in spec:
+                    states = [
+                        InteractState(load_sprite(pref + spec["off"])),
+                        InteractState(load_sprite(pref + spec["on"])),
+                    ]
+                else:
+                    states = [InteractState(s) for s in button_states()]
                 buttons[spec.get("id")] = Interactable(
-                    spec["x"], spec["y"],
-                    [InteractState(s) for s in button_states()],
+                    spec["x"],
+                    spec["y"],
+                    states,
                     **common(spec),
                 )
 
@@ -244,17 +256,25 @@ class GameplayScene(Scene):
             if kind == "button":
                 objs.append(buttons[spec.get("id")])
             elif kind == "door":
-                objs.append(Interactable(
-                    spec["x"], spec["y"],
-                    [
-                        InteractState(load_sprite(pref + spec["closed"]), solid=True),
-                        InteractState(load_sprite(pref + spec["open"]), solid=False),
-                    ],
-                    **common(spec),
-                ))
+                objs.append(
+                    Interactable(
+                        spec["x"],
+                        spec["y"],
+                        [
+                            InteractState(
+                                load_sprite(pref + spec["closed"]), solid=True
+                            ),
+                            InteractState(
+                                load_sprite(pref + spec["open"]), solid=False
+                            ),
+                        ],
+                        **common(spec),
+                    )
+                )
             elif kind == "locked_door":
                 door = Interactable(
-                    spec["x"], spec["y"],
+                    spec["x"],
+                    spec["y"],
                     [
                         InteractState(load_sprite(pref + spec["locked"]), solid=True),
                         InteractState(load_sprite(pref + spec["closed"]), solid=True),
@@ -269,7 +289,8 @@ class GameplayScene(Scene):
                 )
             elif kind == "exit":
                 obj = Interactable(
-                    spec["x"], spec["y"],
+                    spec["x"],
+                    spec["y"],
                     [InteractState(load_sprite(pref + spec["closed"]), solid=True)],
                     interact_radius=config.INTERACT_RADIUS * 0.5,
                     **common(spec),
@@ -285,15 +306,18 @@ class GameplayScene(Scene):
     def _load_props(self, table):
         """Строит декор-пропсы из таблицы.
 
-        Запись: (file, w, h, x, y, y_offset, solid, block_radius[, billboard]).
-        file - путь относительно assets/textures/. Сторона квадрата = max(w, h).
-        block_radius=None -> дефолт config.OBJECT_BLOCK_RADIUS. billboard
-        (опционально, по умолч. False) -> спрайт всегда лицом к игроку.
+        Запись: (file, w, h, x, y, y_offset, solid, block_radius[, angle[,
+        billboard]]). file - путь относительно assets/textures/. Сторона
+        квадрата = max(w, h). block_radius=None -> дефолт OBJECT_BLOCK_RADIUS.
+        angle (опц., радианы, по умолч. 0.0) - поворот плоской поверхности.
+        billboard (опц., по умолч. False) -> спрайт всегда лицом к игроку
+        (тогда angle игнорируется).
         """
         props = []
         for entry in table:
             file, w, h, x, y, y_offset, solid, block_radius = entry[:8]
-            billboard = entry[8] if len(entry) > 8 else False
+            angle = entry[8] if len(entry) > 8 else 0.0
+            billboard = entry[9] if len(entry) > 9 else False
             spr = load_sprite("assets/textures/" + file)
             side = max(w, h)
             props.append(
@@ -301,7 +325,7 @@ class GameplayScene(Scene):
                     x,
                     y,
                     [InteractState(spr, solid=solid)],
-                    angle=0.0,
+                    angle=angle,
                     width=side,
                     height=side,
                     y_offset=y_offset,
@@ -365,6 +389,8 @@ class GameplayScene(Scene):
         F3 (дебаг-оверлей позиции/поворота), F10 (дев-победа)."""
         # Флаг использования сбрасывается каждый кадр и выставляется по нажатию
         self.interact_pressed = False
+        if self._failing:
+            return  # во время паузы проигрыша ввод игнорируется
         for event in events:
             if event.type != pg.KEYDOWN:
                 continue
@@ -452,6 +478,16 @@ class GameplayScene(Scene):
 
     def update(self, dt):
         """Кадр логики: ввод, фиксированные тики (время/мир/урон), HUD, выбор."""
+        # Пауза проигрыша: мир заморожен, держим маску урона, по истечении -
+        # рестарт уровня. Ввод/логика мира на это время не идут.
+        if self._failing:
+            self._fail_left -= dt
+            self.hud.update(dt, player_frozen=False)
+            self.hud.damage_flash = 1.0  # держим маску урона на всю паузу
+            if self._fail_left <= 0.0:
+                self.reset_level()
+            return
+
         is_firing = self._update_input(dt)
 
         # Шаги логики времени (фиксированный тик): механика заёма/возврата и
@@ -465,6 +501,8 @@ class GameplayScene(Scene):
             # Урон от активных ловушек - каждый тик, независимо от остановки мира:
             # включённая ловушка опасна и в замороженном состоянии
             self._apply_trap_damage()
+            if self._failing:
+                break  # начался проигрыш - остальные тики кадра не нужны
 
         self.hud.update(dt, player_frozen=not self.time_ctrl.player_running)
         self.update_interaction()
@@ -600,7 +638,9 @@ class GameplayScene(Scene):
         angle = self.player["angle"]
         line1 = "x=%.2f  y=%.2f  angle=%.3f" % (x, y, angle)
         line2 = "cell row=%d col=%d   deg=%.1f" % (
-            int(y), int(x), float(np.degrees(angle))
+            int(y),
+            int(x),
+            float(np.degrees(angle)),
         )
         m = config.HUD_MARGIN
         lh = self._debug_font.get_height() + 2
@@ -654,13 +694,13 @@ class GameplayScene(Scene):
         update) - каждый тик, чтобы включённая на момент остановки времени
         ловушка оставалась опасной и при замороженном мире.
         """
-        # Обратный отсчёт времени попытки; при исчерпании - рестарт
+        # Обратный отсчёт времени попытки; при исчерпании - пауза проигрыша
         self.time_left_ticks -= 1
         if self.time_left_ticks <= 0:
             self.time_left_ticks = 0
-            print("time is up - level restart", flush=True)
-            self.reset_level()
-            self.hud.set_message("time_up", seconds=2.0)
+            print("time is up - fail pause", flush=True)
+            self.hud.set_message("time_up", seconds=config.FAIL_PAUSE_SECONDS)
+            self._begin_fail()
             return
         for trap in self.traps:
             trap.step()
@@ -701,12 +741,25 @@ class GameplayScene(Scene):
         audio.play("hurt")
         print("player hit by trap, hp=%d" % self.hp, flush=True)
         if self.hp <= 0:
-            print("player died - level restart", flush=True)
-            self.reset_level()
+            print("player died - fail pause", flush=True)
+            self._begin_fail()
+
+    def _begin_fail(self):
+        """Начать паузу проигрыша (HP=0 или вышло время): держим маску урона
+        FAIL_PAUSE_SECONDS секунд + звук, затем рестарт (см. ветку в update).
+        Повторно не запускается, пока идёт пауза."""
+        if self._failing:
+            return
+        self._failing = True
+        self._fail_left = config.FAIL_PAUSE_SECONDS
+        self.hud.flash_damage()
+        audio.play("death")
 
     def reset_level(self):
         """Полный мягкий сброс уровня (при проигрыше)."""
         level = self._level
+        self._failing = False
+        self._fail_left = 0.0
         self.player = level.player_start.copy()
         self.hp = config.PLAYER_MAX_HP
         self._trap_contact_cell = None
