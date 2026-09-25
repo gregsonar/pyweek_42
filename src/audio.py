@@ -21,6 +21,7 @@ SOUND_FILES = {
     "hurt": "hurt.wav",
     "freeze": "freeze.wav",
     "unfreeze": "unfreeze.wav",
+    "death": "death.wav",  # проигрыш (HP=0 или вышло время)
 }
 
 
