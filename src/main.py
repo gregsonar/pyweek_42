@@ -9,6 +9,7 @@ import pygame as pg
 from . import audio, config
 from .app import App
 from .entities import Spark
+from .fonts import load_font
 from .hud import Hud
 from .i18n import has
 from .interactables import (
@@ -141,6 +142,11 @@ class GameplayScene(Scene):
         self._time_limit_ticks = round(level.time_limit * config.TICK_RATE)
         self.time_left_ticks = self._time_limit_ticks
         self.completion_time = None  # время добега до двери (сек), ставится в _win
+
+        # Дебаг-оверлей позиции/поворота игрока (F3) - для расстановки спрайтов
+        # и правки уровня. По умолчанию выключен.
+        self.show_debug = False
+        self._debug_font = load_font(config.HUD_TEXT_SIZE)
 
         # Вводное сообщение уровня (только при первом входе)
         self._show_level_intro()
@@ -355,7 +361,8 @@ class GameplayScene(Scene):
         return self.time_ctrl.player_running and self._stun_ticks <= 0
 
     def handle_events(self, events):
-        """Дискретные события кадра: E (использовать), L (язык), F (заём), Esc."""
+        """Дискретные события кадра: E (использовать), L (язык), F (заём), Esc,
+        F3 (дебаг-оверлей позиции/поворота), F10 (дев-победа)."""
         # Флаг использования сбрасывается каждый кадр и выставляется по нажатию
         self.interact_pressed = False
         for event in events:
@@ -373,6 +380,8 @@ class GameplayScene(Scene):
             elif event.key == pg.K_f and self.player_can_act:
                 self.time_ctrl.toggle_freeze()
                 audio.play("freeze" if not self.time_ctrl.world_running else "unfreeze")
+            elif event.key == pg.K_F3:
+                self.show_debug = not self.show_debug  # оверлей позиции/поворота
             elif event.key == pg.K_F10:
                 self._win()  # ВРЕМЕННО: имитация победы (пока нет цели уровня)
 
@@ -574,6 +583,32 @@ class GameplayScene(Scene):
             world_frozen=not self.time_ctrl.world_running,
             budget_fraction=self.time_ctrl.budget_fraction,
         )
+
+        # 9. Дебаг-оверлей позиции/поворота (F3)
+        if self.show_debug:
+            self._draw_debug(screen)
+
+    def _draw_debug(self, screen):
+        """Оверлей текущей позиции/поворота игрока (для расстановки объектов).
+
+        Показывает x/y и angle (радианы - как в данных уровня, PROPS/
+        INTERACTABLES/player_start), клетку карты (row=int y, col=int x) и угол
+        в градусах. Рисуется в левом верхнем углу.
+        """
+        x = self.player["x"]
+        y = self.player["y"]
+        angle = self.player["angle"]
+        line1 = "x=%.2f  y=%.2f  angle=%.3f" % (x, y, angle)
+        line2 = "cell row=%d col=%d   deg=%.1f" % (
+            int(y), int(x), float(np.degrees(angle))
+        )
+        m = config.HUD_MARGIN
+        lh = self._debug_font.get_height() + 2
+        for i, text in enumerate((line1, line2)):
+            shadow = self._debug_font.render(text, True, config.HUD_SHADOW_COLOR)
+            label = self._debug_font.render(text, True, config.HUD_COLOR)
+            screen.blit(shadow, (m + 1, m + i * lh + 1))
+            screen.blit(label, (m, m + i * lh))
 
     def update_interaction(self):
         """Выбор подсвеченного объекта и его использование по нажатию E."""
