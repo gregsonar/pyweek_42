@@ -1,12 +1,10 @@
 import math
-import random
 
 import numpy as np
 import pygame as pg
 
 from . import audio, config
 from .app import App
-from .entities import Spark
 from .fonts import load_font
 from .hud import Hud
 from .i18n import has
@@ -33,9 +31,6 @@ class GameplayScene(Scene):
         self._level = config.LEVELS[level_index]
 
         self.virt_surf = pg.Surface((config.VIRT_WIDTH, config.VIRT_HEIGHT))
-        self.rays_surf = pg.Surface(
-            (config.VIRT_WIDTH, config.VIRT_HEIGHT), pg.SRCALPHA
-        )
 
         texture_paths = {
             1: "assets/textures/walls/wall_concrete_01.png",
@@ -85,10 +80,6 @@ class GameplayScene(Scene):
 
         self.focus = config.VIGNETTE
         self.brightness = config.BASE_BRIGHTNESS
-        self.rays_intensity = 0.0
-        self._is_firing = False
-
-        self.sparks = [Spark() for _ in range(config.SPARK_COUNT)]
 
         self.exit_door = None
         self.interactables = self._build_interactables()
@@ -348,15 +339,6 @@ class GameplayScene(Scene):
                 self._win()
 
     def _update_input(self, dt):
-        is_firing = pg.mouse.get_pressed()[0]
-        target_focus = 280.0 if is_firing else config.VIGNETTE
-        target_bright = 15.0 if is_firing else config.BASE_BRIGHTNESS
-        target_rays = 1.0 if is_firing else 0.0
-
-        self.focus += (target_focus - self.focus) * 0.1
-        self.brightness += (target_bright - self.brightness) * 0.1
-        self.rays_intensity += (target_rays - self.rays_intensity) * 0.1
-
         rel_x, _ = pg.mouse.get_rel()
         if self.player_can_act:
             self.player["angle"] += rel_x * config.MOUSE_SENSITIVITY
@@ -403,8 +385,6 @@ class GameplayScene(Scene):
         ):
             self.player["y"] += dy * config.MOVE_SPEED * dt
 
-        return is_firing
-
     def update(self, dt):
 
         if self._failing:
@@ -416,7 +396,7 @@ class GameplayScene(Scene):
                 self.reset_level()
             return
 
-        is_firing = self._update_input(dt)
+        self._update_input(dt)
 
         for _ in range(self.timer.update(dt)):
             if self._stun_ticks > 0:
@@ -434,7 +414,6 @@ class GameplayScene(Scene):
         self.hud.update(dt, player_frozen=not self.time_ctrl.player_running)
         self.update_interaction()
         self._update_buzz()
-        self._is_firing = is_firing
 
     _TIME_EVENT_SOUND = {
         "world_freeze": "freeze",
@@ -467,53 +446,6 @@ class GameplayScene(Scene):
         volume = max(0.0, 1.0 - nearest / config.BUZZ_MAX_DIST)
         audio.loop("buzz", volume)
 
-    def update_particles(self, is_firing, hit_info):
-
-        if is_firing and hit_info and hit_info[2] < 6:
-            if random.random() > 0.4:
-                for spark in self.sparks:
-                    if not spark.is_active():
-                        spark.spawn(hit_info[0], hit_info[1], self.player["angle"])
-                        break
-
-        for spark in self.sparks:
-            if spark.update():
-                dx_s = spark.x - self.player["x"]
-                dy_s = spark.y - self.player["y"]
-                dist_s = dx_s * np.cos(self.player["angle"]) + dy_s * np.sin(
-                    self.player["angle"]
-                )
-
-                if dist_s > 0.1:
-
-                    screen_x = int(
-                        (
-                            (
-                                dx_s * -np.sin(self.player["angle"])
-                                + dy_s * np.cos(self.player["angle"])
-                            )
-                            / dist_s
-                            / 1.1
-                            + 0.5
-                        )
-                        * config.VIRT_WIDTH
-                    )
-                    screen_y = int(
-                        config.VIRT_HEIGHT / 2 + (spark.z / dist_s * config.VIRT_HEIGHT)
-                    )
-
-                    if (
-                        0 <= screen_x < config.VIRT_WIDTH
-                        and 0 <= screen_y < config.VIRT_HEIGHT
-                        and dist_s < self.renderer.z_buffer[screen_x, screen_y]
-                    ):
-                        size = max(1, int(3 / dist_s))
-                        pg.draw.rect(
-                            self.virt_surf,
-                            (255, 200, 50),
-                            (screen_x, screen_y, size, size),
-                        )
-
     def draw(self, screen):
 
         frame = self._frame
@@ -530,7 +462,7 @@ class GameplayScene(Scene):
             floor_tiles=floor_tiles,
         )
 
-        hit_info = self.renderer.render_walls(
+        self.renderer.render_walls(
             frame, self.player["x"], self.player["y"], self.player["angle"]
         )
 
@@ -547,12 +479,6 @@ class GameplayScene(Scene):
             frame, focus=self.focus, brightness=self.brightness, saturation_mult=1.0
         )
         pg.surfarray.blit_array(self.virt_surf, final)
-
-        self.renderer.draw_god_rays(self.rays_surf, self.rays_intensity)
-        self.virt_surf.blit(self.rays_surf, (0, 0))
-
-        if self.app.scene is self:
-            self.update_particles(self._is_firing, hit_info)
 
         screen.blit(
             pg.transform.scale(self.virt_surf, (config.WIN_WIDTH, config.WIN_HEIGHT)),

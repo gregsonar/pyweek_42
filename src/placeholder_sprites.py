@@ -29,22 +29,3 @@ def button_states(size=None):
                               int(pressed[1] * 0.7),
                               int(pressed[2] * 0.7), 255))
     return [a, b]
-
-def door_states(size=None):
-    if size is None:
-        size = config.TEX_SIZE
-
-    frame = (90, 70, 45, 255)
-    leaf = (140, 100, 60, 255)
-    seam = (70, 50, 30, 255)
-
-    closed = _blank(size)
-    _fill(closed, 8, 56, 0, 64, leaf)
-    _fill(closed, 31, 33, 4, 60, seam)
-
-    opened = _blank(size)
-
-    _fill(opened, 8, 14, 0, 64, frame)
-    _fill(opened, 50, 56, 0, 64, frame)
-    _fill(opened, 8, 56, 0, 6, frame)
-    return [closed, opened]

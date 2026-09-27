@@ -1,9 +1,7 @@
 import numpy as np
 import pygame as pg
 import math
-import random
 from . import config
-from .utils import clamp
 
 class Renderer:
 
@@ -36,16 +34,6 @@ class Renderer:
         _ys = np.linspace(-0.5, 0.5, config.VIRT_HEIGHT)
         xm, ym = np.meshgrid(_xs, _ys, indexing='ij')
         self._r2 = (xm ** 2 + ym ** 2).astype(np.float32)
-
-        self._init_god_rays()
-
-    def _init_god_rays(self):
-        self.ray_angles = [random.uniform(0, math.pi * 2)
-                           for _ in range(config.GOD_RAY_COUNT)]
-        self.ray_phases = [random.uniform(0, math.pi * 2)
-                           for _ in range(config.GOD_RAY_COUNT)]
-        self.ray_mults = [random.uniform(0.5, 1.0)
-                          for _ in range(config.GOD_RAY_COUNT)]
 
     def _build_variant_map(self, second_share):
         rnd = np.random.random((self.map_h, self.map_w))
@@ -130,36 +118,6 @@ class Renderer:
             sv = int((y / mid) * th) % th
             frame[:, y] = sky[su, sv]
             self.z_buffer[:, y] = 99.0
-
-    def cast_ray_dda(self, px, py, ray_angle, player_angle):
-        rdx, rdy = math.cos(ray_angle), math.sin(ray_angle)
-        mx, my = int(px), int(py)
-
-        ddx = abs(1 / rdx) if rdx != 0 else 1e30
-        ddy = abs(1 / rdy) if rdy != 0 else 1e30
-
-        sx, step_x = (-1, (px - mx) * ddx) if rdx < 0 else (1, (mx + 1 - px) * ddx)
-        sy, step_y = (-1, (py - my) * ddy) if rdy < 0 else (1, (my + 1 - py) * ddy)
-
-        side = 0
-        while True:
-            if step_x < step_y:
-                step_x += ddx
-                mx += sx
-                side = 0
-            else:
-                step_y += ddy
-                my += sy
-                side = 1
-
-            if not (0 <= my < self.map_h and 0 <= mx < self.map_w):
-                return None
-
-            if self.map[my, mx] > 0:
-                raw_dist = step_x - ddx if side == 0 else step_y - ddy
-
-                dist = raw_dist * math.cos(ray_angle - player_angle)
-                return mx, my, dist, raw_dist, side
 
     def _draw_wall_band(self, frame, x, top_ideal, bot_ideal, texture, tx, dist):
         if texture is None:
@@ -373,24 +331,3 @@ class Renderer:
         result = (blended * (light_mask[..., np.newaxis] + config.AMBIENT_FLOOR)).clip(0, 255)
 
         return result.astype(np.uint8)
-
-    def draw_god_rays(self, surface, rays_intensity, center=None):
-        if rays_intensity < 0.05:
-
-            surface.fill((0, 0, 0, 0))
-            return
-
-        surface.fill((0, 0, 0, 0))
-
-        if center is None:
-            center = (config.VIRT_WIDTH // 2, config.VIRT_HEIGHT // 2)
-        cx, cy = center
-
-        t = pg.time.get_ticks() * 0.005
-        for i in range(config.GOD_RAY_COUNT):
-            length = (5 + math.sin(t + self.ray_phases[i]) * 30) * self.ray_mults[i] * rays_intensity
-            ex = cx + math.cos(self.ray_angles[i]) * length
-            ey = cy + math.sin(self.ray_angles[i]) * length
-            alpha = int(35 * rays_intensity)
-            pg.draw.line(surface, (255, 210, 160, alpha),
-                         (cx, cy), (int(ex), int(ey)), 1)
