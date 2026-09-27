@@ -5,10 +5,14 @@ from . import config
 from .confirm import ConfirmScene
 from .credits import CreditsScene
 from .fonts import load_font
-from .i18n import tr
+from .i18n import has, tr
 from .main import GameplayScene
 from .scene import Scene
-from .ui import Menu, MenuItem
+from .ui import Menu, MenuItem, audio_toggle_items
+
+# Ключи строк подсказки "как играть" (по порядку сверху вниз). Отсутствующие
+# в i18n ключи пропускаются - можно оставить 2 строки вместо 3.
+_HOWTO_KEYS = ("menu_howto_1", "menu_howto_2", "menu_howto_3")
 
 
 class MainMenuScene(Scene):
@@ -19,6 +23,7 @@ class MainMenuScene(Scene):
     def __init__(self, app):
         super().__init__(app)
         self.title_font = load_font(config.MENU_TITLE_SIZE)
+        self.help_font = load_font(config.MENU_HELP_SIZE)
         self.menu = Menu(
             [
                 MenuItem(
@@ -31,13 +36,16 @@ class MainMenuScene(Scene):
                     lambda: tr("menu_new_game", self.app.language), self._new_game
                 ),
                 MenuItem(self._language_label, self._toggle_language),
+                *audio_toggle_items(self.app),
                 MenuItem(
                     lambda: tr("menu_credits", self.app.language), self._credits
                 ),
                 MenuItem(
                     lambda: tr("menu_quit", self.app.language), self.app.quit
                 ),
-            ]
+            ],
+            # плотнее обычного: пунктов много (+музыка/звуки) и снизу блок подсказки
+            spacing=config.MENU_ITEM_SPACING_COMPACT,
         )
 
     def _credits(self):
@@ -82,7 +90,30 @@ class MainMenuScene(Scene):
         text = tr("game_title", self.app.language)
         title = self.title_font.render(text, True, config.MENU_TITLE_COLOR)
         shadow = self.title_font.render(text, True, config.HUD_SHADOW_COLOR)
-        trect = title.get_rect(midtop=(w // 2, int(h * 0.18)))
+        trect = title.get_rect(midtop=(w // 2, int(h * 0.13)))
         screen.blit(shadow, trect.move(3, 3))
         screen.blit(title, trect)
-        self.menu.draw(screen, w // 2, trect.bottom + 60)
+        self.menu.draw(screen, w // 2, trect.bottom + 40)
+        self._draw_howto(screen, w, h)
+
+    def _draw_howto(self, screen, w, h):
+        """Блок "как играть": 2-3 строки из i18n, прижаты к низу экрана по центру.
+
+        Отсутствующие ключи пропускаются. Блок кладётся снизу вверх, чтобы не
+        зависеть от высоты меню и всегда помещаться на экране.
+        """
+        lines = [
+            tr(key, self.app.language) for key in _HOWTO_KEYS
+            if has(key, self.app.language)
+        ]
+        if not lines:
+            return
+        line_h = self.help_font.get_height() + config.MENU_HELP_LINE_SPACING
+        # y нижней строки: отступ снизу; остальные - выше на line_h каждая
+        bottom = h - config.MENU_HELP_BOTTOM_MARGIN
+        for i, text in enumerate(reversed(lines)):
+            label = self.help_font.render(text, True, config.MENU_HELP_COLOR)
+            shadow = self.help_font.render(text, True, config.HUD_SHADOW_COLOR)
+            rect = label.get_rect(midbottom=(w // 2, bottom - i * line_h))
+            screen.blit(shadow, rect.move(2, 2))
+            screen.blit(label, rect)

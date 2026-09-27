@@ -1,0 +1,8 @@
+Sounds:
+buzz.wav - long, drawn out arcing (several seconds) from high voltage neon transformer by Jon5515 -- https://freesound.org/s/871582/ -- License: Attribution 4.0
+
+hurt.wav - SYS_glitched_undo by MirMaximus -- https://freesound.org/s/864200/ -- License: Creative Commons 0
+
+death.wav - Hit reverb (dark) by xkeril -- https://freesound.org/s/701308/ -- License: Creative Commons 0
+
+freeze.wav and unfreeze wav - Escape - Rpg by colorsCrimsonTears -- https://freesound.org/s/562293/ -- License: Creative Commons 0

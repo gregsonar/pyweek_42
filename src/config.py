@@ -59,7 +59,7 @@ MAX_DT = 0.05  # максимальный шаг кадра (сек): защит
 TICK_RATE = 60  # логических тиков в секунду (фиксированный шаг логики)
 MAX_TICKS_PER_FRAME = 5  # максимум тиков за кадр (защита от спирали смерти при лаге)
 FREEZE_BUDGET_TICKS = 180  # бюджет заморозки мира (тики; 180 = 3 с при 60 тик/с)
-REPAY_INTERVAL_MIN = 300  # мин. задержка до возврата долга (тики; 5 с)
+REPAY_INTERVAL_MIN = 210  # мин. задержка до возврата долга (тики; 3 с)
 REPAY_INTERVAL_MAX = 720  # макс. задержка до возврата долга (тики; 12 с)
 
 # Игрок и ловушки
@@ -73,6 +73,16 @@ PLAYER_STUN_TICKS = round(0.3 * TICK_RATE)  # стан игрока при ур�
 
 # Локализация интерфейса. Языки: "en", "ru". Переключение в игре - клавиша L.
 LANGUAGE = "en"
+
+# Аудио по умолчанию (переопределяется сохранением save.json). Музыка и эффекты
+# переключаются в главном меню и меню паузы; если оба выключены - тишина.
+AUDIO_MUSIC_DEFAULT = True  # музыка (саундтрек уровней) включена по умолчанию
+AUDIO_SFX_DEFAULT = True  # звуковые эффекты включены по умолчанию
+# Общий уровень громкости по категориям (0..1). Музыка тише эффектов, чтобы
+# эффекты были заметнее. MUSIC_VOLUME множит поток саундтрека, SFX_VOLUME -
+# разовые эффекты (гудение ловушки далее домножается на близость).
+MUSIC_VOLUME = 0.4  # громкость саундтрека
+SFX_VOLUME = 1.0  # громкость звуковых эффектов
 
 # Лимит времени на попытку по умолчанию (сек) - см. Level.time_limit.
 LEVEL_TIME_LIMIT = 90.0
@@ -104,6 +114,11 @@ DAMAGE_FLASH_FADE = 2.5  # скорость затухания вспышки (�
 # Пауза проигрыша (HP=0 или вышло время): держим маску урона, потом рестарт
 FAIL_PAUSE_SECONDS = 2.0  # длительность паузы перед рестартом (сек)
 
+# Гудение активной спрайтовой ловушки (BatteryTrap): громкость по близости к
+# ближайшей активной ловушке. На расстоянии 0 клеток - полная, дальше линейно
+# спадает до нуля на BUZZ_MAX_DIST клетках. 0 или меньше - гудение выключено.
+BUZZ_MAX_DIST = 6.0  # дальность слышимости гудения (клетки)
+
 # Маска заморозки игрока (возврат долга): синяя, пульсирует, пока игрок заморожен
 FREEZE_MASK_COLOR = (30, 90, 220)  # цвет маски заморозки игрока
 FREEZE_MASK_MIN_ALPHA = 35  # альфа в нижней точке пульса (0..255)
@@ -128,9 +143,18 @@ MENU_TITLE_SIZE = 64  # кегль заголовка
 MENU_TITLE_COLOR = (235, 240, 250)
 MENU_ITEM_SIZE = 32  # кегль пунктов меню
 MENU_ITEM_SPACING = 16  # доп. зазор между пунктами (px)
+MENU_ITEM_SPACING_COMPACT = 12  # уплотнённый зазор (главное меню: много пунктов)
 MENU_COLOR = (200, 205, 215)  # обычный пункт
 MENU_COLOR_SELECTED = (120, 210, 255)  # выбранный пункт (в тон HUD-заморозке)
 MENU_COLOR_DISABLED = (90, 95, 105)  # неактивный пункт
+# Титры: базовый кегль строк. Реальный шаг подгоняется под высоту экрана
+# (список может расти), а длинные строки ужимаются по ширине - см. credits.py.
+CREDITS_LINE_SIZE = 22  # базовый кегль строки титров
+# Подсказка "как играть" в главном меню (2-3 строки, прижаты к низу экрана)
+MENU_HELP_SIZE = 20  # кегль строк подсказки
+MENU_HELP_COLOR = (150, 158, 172)  # приглушённый цвет строк подсказки
+MENU_HELP_LINE_SPACING = 6  # доп. зазор между строками подсказки (px)
+MENU_HELP_BOTTOM_MARGIN = 24  # отступ блока подсказки от низа экрана (px)
 PAUSE_TITLE_SIZE = 52  # кегль заголовка паузы
 PAUSE_DIM_COLOR = (0, 0, 0)  # цвет затемнения игры под паузой
 PAUSE_DIM_ALPHA = 170  # альфа затемнения (0..255)
@@ -140,10 +164,10 @@ FADE_DURATION = 0.25  # длительность половины переход
 FADE_COLOR = (0, 0, 0)  # цвет затемнения перехода
 
 # Сплеш-заставка при запуске (фикс. длительность + скип любой клавишей/кликом)
-SPLASH_LOGO_PATH = "assets/textures/ui/logo.png"  # опц.; иначе текст-заглушка
+SPLASH_LOGO_PATH = "assets/logo.png"  # опц.; иначе текст-заглушка
 SPLASH_TITLE_SIZE = 72  # кегль текста-заглушки (когда нет лого)
 SPLASH_FADE_IN = 0.7  # сек появления
-SPLASH_HOLD = 1.1  # сек показа на полной яркости
+SPLASH_HOLD = 1.6  # сек показа на полной яркости
 SPLASH_FADE_OUT = 0.7  # сек угасания
 
 # Взаимодействие с объектами
@@ -169,7 +193,7 @@ DEFAULT_MAP = [
     [11, 0, 0, 2, 0, 0, 0, 0, 0, 0, 0, 1, 0, 2],
     [2, 1, 1, 1, 1, 1, 0, 1, 1, 14, 1, 1, 1, 3],  # перегородка с проёмом (x=6)
     [3, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 2],
-    [2, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 3],
+    [2, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 3],
     [3, 0, 5, 0, 0, 0, 0, 0, 0, 1, 1, 0, 1, 2],
     [2, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 3],
     [1, 4, 5, 1, 10, 1, 7, 1, 3, 1, 23, 23, 23, 1],
@@ -177,7 +201,7 @@ DEFAULT_MAP = [
 
 
 # Стартовая позиция игрока (в северной половине, взгляд на север - к панораме)
-PLAYER_START = {"x": 6.5, "y": 4.2, "angle": -math.pi / 2}
+PLAYER_START = {"x": 9.5, "y": 3, "angle": -math.pi / 2}
 
 
 # Верхний пояс стен (z 1..2) строится из нижнего. Для каждого типа нижнего блока
@@ -324,7 +348,17 @@ INTERACTABLES = [
 # выкл, повтор. Текстуры ловушек - на стороне игры.
 TRAPS = [
     (6, 3, [1500, 1500], True),
+    (6, 4, [1500, 1500, 2000, 500], True),
+    (7, 9, [1000, 1000, 500, 3000], False),
     (8, 9, [2000, 1000, 500, 3000], False),
+]
+
+# BATTERY_TRAPS: (x, y, intervals_ms, start_active). Тот же формат циклов, что у
+# TRAPS, но ловушка стоит вертикальным спрайтом в центре клетки и НЕ блокирует
+# проход. Урон - по клетке в состоянии on (как у напольной). Спрайты on/off - на
+# стороне игры (spr_batteryTrap_on/off). Активная ловушка гудит (см. BUZZ_MAX_DIST).
+BATTERY_TRAPS = [
+    (4, 4, [1800, 1200], True),
 ]
 
 
@@ -339,7 +373,10 @@ LEVEL1 = Level(
     props=PROPS,
     interactables=INTERACTABLES,
     traps=TRAPS,
+    battery_traps=BATTERY_TRAPS,
     floor_overrides=FLOOR_OVERRIDES,
+    music="sonic_drive_slow.wav",
+    music_loop=True,
 )
 
 
@@ -354,10 +391,6 @@ _MAZE_GRID[14][2] = 9
 _MAZE_GRID[7][10] = 2
 _MAZE_GRID[10][17] = 7
 _MAZE_GRID[6][15] = 7
-
-print("_MAZE_GRID")
-print(_MAZE_GRID)
-
 
 # PROPS: (file, w, h, x, y, y_offset, solid, block_radius[, angle[, billboard]]).
 LEVEL2_PROPS = [
@@ -399,26 +432,45 @@ LEVEL2 = Level(
         (11, 1, [1000, 500, 2000, 500], True),
     ],
     floor_overrides={},
+    music="sonic_drive_slow.wav",  # файл в assets/music (тишина, пока файла нет)
+    music_loop=False,
 )
 
 _MAZE_GRID_2, _MAZE_START_2, _MAZE_ANGLE_2, _MAZE_EXIT_2 = generate_maze(
     cw=3, ch=40, seed=42, wall_id=2
 )
 
-print("_MAZE_GRID 2")
-print(_MAZE_GRID_2)
 _MAZE_GRID_2[80][5] = 1
 
-LEVEL3 = Level(
+LEVEL4 = Level(
     lower_map=_MAZE_GRID_2,
     upper_map=_build_upper_map(_MAZE_GRID_2),
     player_start={"x": _MAZE_START_2[0], "y": _MAZE_START_2[1], "angle": _MAZE_ANGLE_2},
     sky_mode=True,
-    time_limit=120.0,
-    number=3,
-    props=[],
+    time_limit=70.0,
+    number=4,
+    props=[
+        ("walls/wall_concrete_01_up.png", 1, 1, 1.5, 5.5, 1, False, 0, 0),
+        ("sprites/spr_plant.png", 0.62, 0.85, 1.8, 7, 0, True, 0.35, 0, True),
+        ("sprites/spr_plant.png", 0.50, 0.80, 1.4, 9, 0, True, 0.3, 0, True),
+        ("sprites/spr_plant.png", 0.50, 0.80, 1.7, 11, 0, True, 0.3, 0, True),
+        ("sprites/spr_bottles_1.png", 1, 1, 1.6, 48, 0, True, 0.3, 0, True),
+        ("sprites/spr_bottles_1.png", 4, 4, 1.9, 59, 0, False, 0, 0, False),
+    ],
     interactables=[
-        # Выход - билборд (всегда лицом к игроку): удобно в лабиринте
+        {
+            "kind": "door",
+            "x": 1.5,
+            "y": 5.5,
+            "angle": 0.0,
+            "width": 1,
+            "height": 1,
+            "y_offset": 0.0,
+            "block_radius": 0.55,
+            "locked": "sprites/spr_door1_closed_off.png",
+            "closed": "sprites/spr_door1_closed.png",
+            "open": "sprites/spr_door1_open.png",
+        },
         {
             "kind": "exit",
             "x": _MAZE_EXIT_2[0],
@@ -431,11 +483,196 @@ LEVEL3 = Level(
             "closed": "sprites/spr_door2_closed-exit.png",
         },
     ],
-    traps=[(5, 3, [1500, 1500], True)],
+    traps=[
+        (2, 15, [1000, 1500], True),
+        (3, 15, [1500, 1500], True),
+        (4, 15, [2000, 1500], True),
+        (4, 21, [1000, 500, 1000, 1000], True),
+        (5, 3, [1500, 1500], True),
+        (3, 28, [1500, 1000], True),
+        (3, 29, [1000, 900], True),
+    ],
     floor_overrides={},
+    music="sonic_drive_fast.wav",  # файл в assets/music (тишина, пока файла нет)
+    music_loop=True,
 )
 
-LEVEL4_MAP = [
+LEVEL3_MAP = [
+    [1, 1, 2, 1, 1, 1, 1, 10, 7, 1, 1, 1, 1, 1],
+    [1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 9],
+    [1, 0, 1, 0, 0, 1, 0, 0, 1, 1, 0, 1, 1, 1],
+    [1, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 15],
+    [1, 1, 0, 0, 0, 1, 0, 0, 1, 0, 0, 0, 0, 16],
+    [1, 8, 1, 0, 1, 1, 1, 1, 1, 1, 1, 12, 1, 1],
+    [1, 0, 0, 0, 0, 2, 0, 0, 0, 0, 0, 0, 0, 1],
+    [1, 0, 1, 0, 0, 1, 0, 0, 10, 0, 0, 0, 0, 1],
+    [1, 0, 0, 0, 0, 0, 0, 0, 1, 1, 1, 0, 0, 14],
+    [1, 0, 0, 0, 0, 1, 0, 0, 1, 0, 0, 0, 0, 1],
+    [1, 1, 7, 1, 4, 1, 10, 1, 1, 1, 1, 1, 1, 1],
+]
+
+LEVEL3_UPPER_OVERRIDES = {
+    (6, 0): 23,
+    (2, 3): 21,
+    (3, 3): 21,
+    (3, 5): 21,
+    (5, 3): 21,
+    (5, 8): 21,
+    (5, 11): 13,
+    (7, 3): 23,
+    (2, 10): 21,
+}
+
+LEVEL3_FLOOR_OVERRIDES = {}
+
+LEVEL3_START = {"x": 1.5, "y": 1.2, "angle": 0}
+
+LEVEL3_PROPS = [
+    ("sprites/spr_bottles_1.png", 1, 1, 10.5, 4.5, 0.0, False, None),
+    ("sprites/spr_bottles_1.png", 0.8, 0.8, 10.5, 6.1, 0.0, False, None),
+    ("sprites/spr_garbage_1.png", 0.80, 0.85, 7.3, 9.5, 0.0, True, 0.4, 0, True),  #
+]
+
+LEVEL3_BATTERY_TRAPS = [
+    (3, 4, [1800, 1200], True),
+]
+
+LEVEL3_INTERACTABLES = [
+    {
+        "kind": "door",
+        "x": 3.5,
+        "y": 5.5,
+        "angle": 0.0,
+        "width": 1,
+        "height": 1,
+        "y_offset": 0.0,
+        "block_radius": 0.55,
+        "locked": "sprites/spr_door1_closed_off.png",
+        "closed": "sprites/spr_door1_closed.png",
+        "open": "sprites/spr_door1_open.png",
+    },
+    {
+        "kind": "door",
+        "x": 5.5,
+        "y": 3.5,
+        "angle": math.pi / 2,
+        "width": 1,
+        "height": 1,
+        "y_offset": 0.0,
+        "block_radius": 0.55,
+        "locked": "sprites/spr_door1_closed_off.png",
+        "closed": "sprites/spr_door1_closed.png",
+        "open": "sprites/spr_door1_open.png",
+    },
+    {
+        "kind": "door",
+        "x": 10.5,
+        "y": 2.5,
+        "angle": 0,
+        "width": 1,
+        "height": 1,
+        "y_offset": 0.0,
+        "block_radius": 0.45,
+        "locked": "sprites/spr_door1_closed_off.png",
+        "closed": "sprites/spr_door1_closed.png",
+        "open": "sprites/spr_door1_open.png",
+    },
+    {
+        "kind": "button",
+        "id": "b1l3",
+        "x": 9.01,
+        "y": 3.5,
+        "angle": math.pi / 2,
+        "width": 0.5,
+        "height": 0.5,
+        "y_offset": 0.35,
+        "cyclic": True,
+        "off": "sprites/spr_button1_off.png",
+        "on": "sprites/spr_button1_on.png",
+    },
+    {
+        "kind": "button",
+        "id": "b2l3",
+        "x": 1.01,
+        "y": 1.5,
+        "angle": math.pi / 2,
+        "width": 0.5,
+        "height": 0.5,
+        "y_offset": 0.35,
+        "cyclic": True,
+        "off": "sprites/spr_button1_off.png",
+        "on": "sprites/spr_button1_on.png",
+    },
+    {
+        "kind": "locked_door",
+        "button": "b1l3",
+        "x": 5,
+        "y": 8.5,
+        "angle": math.pi / 2,
+        "width": 1,
+        "height": 1,
+        "y_offset": 0.0,
+        "block_radius": 0.55,
+        "locked": "sprites/spr_door1_closed_off.png",
+        "closed": "sprites/spr_door1_closed.png",
+        "open": "sprites/spr_door1_open.png",
+    },
+    {
+        "kind": "locked_door",
+        "button": "b2l3",
+        "x": 9,
+        "y": 10.5,
+        "angle": math.pi / 2,
+        "width": 1,
+        "height": 1,
+        "y_offset": 0.0,
+        "block_radius": 0.55,
+        "locked": "sprites/spr_door1_closed_off.png",
+        "closed": "sprites/spr_door1_closed.png",
+        "open": "sprites/spr_door1_open.png",
+    },
+    {
+        "kind": "exit",
+        "x": 9.01,
+        "y": 9.5,
+        "billboard": False,
+        "angle": math.pi / 2,
+        "width": 1,
+        "height": 1,
+        "y_offset": 0.0,
+        "cyclic": False,
+        "closed": "sprites/spr_door2_closed-exit.png",
+    },
+]
+
+LEVEL3_TRAPS = [
+    (6, 3, [1000, 1000, 1000, 900], True),
+    (6, 4, [1000, 1200, 1200, 800], True),
+    (8, 1, [1300, 800], True),
+    (6, 8, [1300, 800], True),
+    (6, 7, [1000, 800], True),
+    (2, 6, [1000, 1000, 1000, 600, 1000, 200], True),
+    (3, 6, [1000, 1000, 1000, 600, 1000, 200], True),
+    (4, 6, [1000, 1000, 1000, 600, 1000, 200], True),
+]
+
+LEVEL3 = Level(
+    lower_map=LEVEL3_MAP,
+    upper_map=_build_upper_map(LEVEL3_MAP, LEVEL3_UPPER_OVERRIDES),
+    player_start=LEVEL3_START,
+    sky_mode=True,  # True - небо (параллакс); False - потолок
+    time_limit=45,
+    number=3,
+    props=LEVEL3_PROPS,
+    interactables=LEVEL3_INTERACTABLES,
+    traps=LEVEL3_TRAPS,
+    battery_traps=LEVEL3_BATTERY_TRAPS,
+    floor_overrides=LEVEL3_FLOOR_OVERRIDES,
+    music="sonic_drive_slow.wav",  # файл в assets/music (тишина, пока файла нет)
+    music_loop=True,
+)
+
+LEVEL5_MAP = [
     [1, 9, 1, 1],
     [1, 0, 0, 1],
     [1, 0, 0, 1],
@@ -463,12 +700,12 @@ LEVEL4_MAP = [
     [1, 1, 1, 1],
 ]
 
-LEVEL4_UPPER_OVERRIDES = {
+LEVEL5_UPPER_OVERRIDES = {
     (6, 3): 21,
     (16, 0): 21,
 }
 
-LEVEL4_FLOOR_OVERRIDES = {
+LEVEL5_FLOOR_OVERRIDES = {
     (1, 1): "floor2",
     (4, 2): "floor2",
     (5, 2): "floor2",
@@ -484,17 +721,17 @@ LEVEL4_FLOOR_OVERRIDES = {
     (23, 2): "floor2",
 }
 
-LEVEL4_START = {"x": 1.5, "y": 1.5, "angle": 90}
+LEVEL5_START = {"x": 1.5, "y": 1.5, "angle": 90}
 
 # PROPS: (file, w, h, x, y, y_offset, solid, block_radius)
-LEVEL4_PROPS = [
+LEVEL5_PROPS = [
     ("sprites/spr_window.png", 1, 1, 3, 6.5, 0, True, 0.4, math.radians(90)),
     ("walls/wall_concrete_01_up.png", 1, 1, 3, 6.5, 1, True, 0.4, math.radians(90)),
     ("sprites/spr_window.png", 1, 1, 1, 16.5, 0, True, 0.4, math.radians(90)),
     ("walls/wall_concrete_01_up.png", 1, 1, 1, 16.5, 1, True, 0.4, math.radians(90)),
 ]
 
-LEVEL4_INTERACTABLES = [
+LEVEL5_INTERACTABLES = [
     {
         "kind": "exit",
         "x": 1.5,
@@ -509,11 +746,11 @@ LEVEL4_INTERACTABLES = [
 ]
 
 # TRAPS: (x, y, on_ticks, off_ticks, start_active)
-LEVEL4_TRAPS = [
+LEVEL5_TRAPS = [
     (2, 4, [90, 90], True),
+    (1, 4, [90, 90], True),
     (1, 6, [90, 1000], True),
     (2, 6, [90, 90], True),
-    (1, 4, [90, 90], True),
     (1, 11, [90, 100], True),
     (2, 11, [90, 60], True),
     (1, 12, [1000, 300], True),
@@ -531,18 +768,28 @@ LEVEL4_TRAPS = [
     (1, 15, [3000, 52], True),
 ]
 
-LEVEL4 = Level(
-    lower_map=LEVEL4_MAP,
-    upper_map=_build_upper_map(LEVEL4_MAP, LEVEL4_UPPER_OVERRIDES),
-    player_start=LEVEL4_START,
+LEVEL5_BATTERY_TRAPS = [
+    (1, 5, [1800, 1000], True),
+    (2, 5, [1500, 1500], True),
+    (1, 9, [1000, 1500], True),
+    (2, 9, [1000, 1800], True),
+]
+
+LEVEL5 = Level(
+    lower_map=LEVEL5_MAP,
+    upper_map=_build_upper_map(LEVEL5_MAP, LEVEL5_UPPER_OVERRIDES),
+    player_start=LEVEL5_START,
     sky_mode=True,  # True - небо (параллакс); False - потолок
     time_limit=45,
-    number=4,
-    props=LEVEL4_PROPS,
-    interactables=LEVEL4_INTERACTABLES,
-    traps=LEVEL4_TRAPS,
-    floor_overrides=LEVEL4_FLOOR_OVERRIDES,
+    number=5,
+    props=LEVEL5_PROPS,
+    interactables=LEVEL5_INTERACTABLES,
+    traps=LEVEL5_TRAPS,
+    floor_overrides=LEVEL5_FLOOR_OVERRIDES,
+    battery_traps=LEVEL5_BATTERY_TRAPS,
+    music="sonic_drive_fast.wav",  # файл в assets/music (тишина, пока файла нет)
+    music_loop=False,
 )
 # Список уровней (по порядку прохождения) и алиас на первый.
-LEVELS = [LEVEL1, LEVEL2, LEVEL3, LEVEL4]
+LEVELS = [LEVEL1, LEVEL2, LEVEL3, LEVEL4, LEVEL5]
 DEFAULT_LEVEL = LEVEL1

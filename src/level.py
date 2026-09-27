@@ -22,5 +22,8 @@ class Level:
     number: int = 1           # номер уровня (для строки HUD)
     props: list = field(default_factory=list)          # декор (дата-таблица)
     interactables: list = field(default_factory=list)  # объекты (дата-таблица)
-    traps: list = field(default_factory=list)          # ловушки (дата-таблица)
+    traps: list = field(default_factory=list)          # напольные ловушки (данные)
+    battery_traps: list = field(default_factory=list)  # спрайтовые ловушки (данные)
     floor_overrides: dict = field(default_factory=dict)  # кастомный пол по клеткам
+    music: str = ""           # саундтрек уровня (файл в assets/music; "" - без музыки)
+    music_loop: bool = True   # зациклить трек (True) или проиграть один раз (False)

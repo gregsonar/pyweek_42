@@ -7,7 +7,7 @@ from . import config
 from .fonts import load_font
 from .i18n import tr
 from .scene import Scene
-from .ui import Menu, MenuItem
+from .ui import Menu, MenuItem, audio_toggle_items
 
 
 class PauseScene(Scene):
@@ -31,6 +31,7 @@ class PauseScene(Scene):
                 MenuItem(
                     lambda: tr("pause_resume", self.app.language), self._resume
                 ),
+                *audio_toggle_items(self.app),
                 MenuItem(
                     lambda: tr("pause_main_menu", self.app.language), self._to_menu
                 ),

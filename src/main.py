@@ -1,6 +1,7 @@
 # src/main.py
 """Игровая сцена: ввод, обновление и отрисовка игрового процесса."""
 
+import math
 import random
 
 import numpy as np
@@ -22,7 +23,7 @@ from .placeholder_sprites import button_states
 from .renderer import Renderer
 from .scene import Scene
 from .timing import TimeController, Timer
-from .traps import Trap
+from .traps import BatteryTrap, Trap
 from .utils import desaturate, load_sprite, load_texture, load_textures
 
 
@@ -120,6 +121,8 @@ class GameplayScene(Scene):
 
         # Ловушки (объекты мира; циклят по мировым тикам)
         self.traps = self._build_traps()
+        # Спрайтовые ловушки (гудят в состоянии on, урон по клетке, проход не блокируют)
+        self.battery_traps = self._build_battery_traps()
 
         # Здоровье игрока и состояние касания активной ловушки
         self.hp = config.PLAYER_MAX_HP
@@ -156,8 +159,19 @@ class GameplayScene(Scene):
         self._show_level_intro()
 
     def on_enter(self):
-        """Сброс накопленной дельты мыши, чтобы камера не прыгнула при входе."""
+        """Вход в сцену: сброс дельты мыши + старт саундтрека уровня."""
         pg.mouse.get_rel()
+        self._start_music()
+
+    def on_exit(self):
+        """Уход со сцены (выход в меню/смена уровня/прохождение): глушим
+        зацикленное гудение и саундтрек уровня (забывая трек - в меню его нет)."""
+        audio.stop_loop()
+        audio.stop_music(clear=True)
+
+    def _start_music(self):
+        """Запустить саундтрек уровня с его флагом loop (тишина, если не задан)."""
+        audio.play_music(self._level.music, loop=self._level.music_loop)
 
     def _win(self):
         """Завершение уровня. Не последний -> межуровневый экран и следующий
@@ -355,10 +369,29 @@ class GameplayScene(Scene):
             for (x, y, intervals_ms, active) in table
         ]
 
+    def _build_battery_traps(self):
+        """Спрайтовые ловушки из дата-таблицы уровня (совместимо с дизайнером)."""
+        return self._load_battery_traps(self._level.battery_traps)
+
+    def _load_battery_traps(self, table):
+        """Строит спрайтовые ловушки из таблицы: (x, y, intervals_ms, start_active).
+
+        Формат циклов - как у напольных. Спрайты состояний on/off - на стороне
+        игры (spr_batteryTrap_on/off). Ловушка стоит билбордом в центре клетки,
+        проход не блокирует, урон - по клетке в состоянии on.
+        """
+        pref = "assets/textures/sprites/"
+        tex_on = load_sprite(pref + "spr_batteryTrap_on.png")
+        tex_off = load_sprite(pref + "spr_batteryTrap_off.png")
+        return [
+            BatteryTrap(x, y, tex_on, tex_off, intervals_ms, start_active=active)
+            for (x, y, intervals_ms, active) in table
+        ]
+
     @property
     def _world_objects(self):
-        """Все спрайтовые объекты сцены: интерактивные, декор, управляемые двери."""
-        return self.interactables + self.props + self.linked_doors
+        """Все спрайтовые объекты сцены: интерактивные, декор, двери, спрайт-ловушки."""
+        return self.interactables + self.props + self.linked_doors + self.battery_traps
 
     def _blocked_by_object(self, nx, ny):
         """Есть ли рядом с точкой (nx, ny) твёрдый объект, мешающий проходу.
@@ -397,6 +430,7 @@ class GameplayScene(Scene):
             if event.key == pg.K_ESCAPE:
                 from .pause import PauseScene  # ленивый импорт - разрыв цикла
 
+                audio.stop_loop()  # глушим гудение ловушек на время паузы
                 self.app.push_scene(PauseScene(self.app))
             elif event.key == pg.K_e:
                 self.interact_pressed = True
@@ -404,8 +438,9 @@ class GameplayScene(Scene):
                 self.app.set_language("ru" if self.app.language == "en" else "en")
                 self.hud.set_language(self.app.language)
             elif event.key == pg.K_f and self.player_can_act:
+                # Звук - не здесь: тоггл при пустом бюджете состояние не меняет,
+                # звук играется по РЕАЛЬНОМУ переходу (см. drain events в update).
                 self.time_ctrl.toggle_freeze()
-                audio.play("freeze" if not self.time_ctrl.world_running else "unfreeze")
             elif event.key == pg.K_F3:
                 self.show_debug = not self.show_debug  # оверлей позиции/поворота
             elif event.key == pg.K_F10:
@@ -484,6 +519,7 @@ class GameplayScene(Scene):
             self._fail_left -= dt
             self.hud.update(dt, player_frozen=False)
             self.hud.damage_flash = 1.0  # держим маску урона на всю паузу
+            audio.stop_loop()  # тишина гудения на время паузы проигрыша
             if self._fail_left <= 0.0:
                 self.reset_level()
             return
@@ -504,9 +540,56 @@ class GameplayScene(Scene):
             if self._failing:
                 break  # начался проигрыш - остальные тики кадра не нужны
 
+        self._play_time_events()
+
         self.hud.update(dt, player_frozen=not self.time_ctrl.player_running)
         self.update_interaction()
+        self._update_buzz()
         self._is_firing = is_firing
+
+    # Переход состояния времени -> звук. Заморозка (мира игроком или игрока миром
+    # при возврате долга) - "freeze"; снятие любой заморозки - "unfreeze".
+    _TIME_EVENT_SOUND = {
+        "world_freeze": "freeze",
+        "player_freeze": "freeze",
+        "world_unfreeze": "unfreeze",
+        "player_unfreeze": "unfreeze",
+    }
+
+    def _play_time_events(self):
+        """Проиграть звук по реальным переходам состояния времени за кадр.
+
+        События идут и от игрока (тоггл F), и от мира (возврат долга замораживает/
+        размораживает игрока). Тоггл при пустом бюджете состояние не меняет и
+        события не создаёт - звука нет.
+        """
+        for ev in self.time_ctrl.drain_events():
+            sound = self._TIME_EVENT_SOUND.get(ev)
+            if sound is not None:
+                audio.play(sound)
+
+    def _update_buzz(self):
+        """Гудение ближайшей активной спрайтовой ловушки: громкость по близости.
+
+        Громкость линейно спадает от 1 (в клетке ловушки) до 0 на расстоянии
+        config.BUZZ_MAX_DIST. Нет активных ловушек (или дальше предела) - тишина.
+        """
+        if config.BUZZ_MAX_DIST <= 0.0:
+            audio.stop_loop()
+            return
+        px, py = self.player["x"], self.player["y"]
+        nearest = None
+        for trap in self.battery_traps:
+            if not trap.active:
+                continue
+            dist = math.hypot(trap.x - px, trap.y - py)
+            if nearest is None or dist < nearest:
+                nearest = dist
+        if nearest is None:
+            audio.loop("buzz", 0.0)  # нет активных - гудение выключается
+            return
+        volume = max(0.0, 1.0 - nearest / config.BUZZ_MAX_DIST)
+        audio.loop("buzz", volume)
 
     def update_particles(self, is_firing, hit_info):
         """Обновление и отрисовка частиц."""
@@ -704,10 +787,15 @@ class GameplayScene(Scene):
             return
         for trap in self.traps:
             trap.step()
+        for trap in self.battery_traps:
+            trap.step()
 
     def _active_trap_at(self, cell):
-        """Активная ловушка в клетке (строка, столбец) или None."""
+        """Активная ловушка (напольная или спрайтовая) в клетке или None."""
         for trap in self.traps:
+            if trap.active and trap.cell == cell:
+                return trap
+        for trap in self.battery_traps:
             if trap.active and trap.cell == cell:
                 return trap
         return None
@@ -753,6 +841,7 @@ class GameplayScene(Scene):
         self._failing = True
         self._fail_left = config.FAIL_PAUSE_SECONDS
         self.hud.flash_damage()
+        audio.stop_music()  # тишина саундтрека на время паузы проигрыша
         audio.play("death")
 
     def reset_level(self):
@@ -767,6 +856,8 @@ class GameplayScene(Scene):
         self._stun_ticks = 0
         for trap in self.traps:
             trap.reset()
+        for trap in self.battery_traps:
+            trap.reset()
         for obj in self.interactables:
             obj.state = 0
         for door in self.linked_doors:
@@ -779,6 +870,8 @@ class GameplayScene(Scene):
         # Сброс обратного отсчёта попытки и состояния HUD
         self.time_left_ticks = self._time_limit_ticks
         self.hud.reset()
+        # Перезапустить саундтрек уровня с начала (в _begin_fail он был остановлен)
+        self._start_music()
         # TODO: при смерти/рестарте показывать отдельное сообщение (не вводное) -
         # реализуем позже; вводное сообщение уровня здесь намеренно не повторяем
 
@@ -790,4 +883,5 @@ def run_engine():
 
     app = App()
     app.push_scene(SplashScene(app))
+    audio.play("intro")
     app.run()

@@ -28,6 +28,19 @@ class App:
         # значение по умолчанию из config.
         self.save = save_module.load()
         self.language = self.save.language or config.LANGUAGE
+        # Аудио-настройки: из сейва, иначе - значения по умолчанию из config.
+        self.music_on = (
+            self.save.music_on
+            if self.save.music_on is not None
+            else config.AUDIO_MUSIC_DEFAULT
+        )
+        self.sfx_on = (
+            self.save.sfx_on
+            if self.save.sfx_on is not None
+            else config.AUDIO_SFX_DEFAULT
+        )
+        audio.set_music_enabled(self.music_on)
+        audio.set_sfx_enabled(self.sfx_on)
         self.running = True
         self._scenes = []  # стек сцен, верхняя - активная
         self._fade = None  # активный переход между сценами (или None)
@@ -42,6 +55,20 @@ class App:
     def persist(self):
         """Записать текущее сохранение на диск."""
         save_module.persist(self.save)
+
+    def toggle_music(self):
+        """Переключить музыку, применить к аудио и сохранить выбор."""
+        self.music_on = not self.music_on
+        self.save.music_on = self.music_on
+        audio.set_music_enabled(self.music_on)
+        self.persist()
+
+    def toggle_sfx(self):
+        """Переключить звуковые эффекты, применить к аудио и сохранить выбор."""
+        self.sfx_on = not self.sfx_on
+        self.save.sfx_on = self.sfx_on
+        audio.set_sfx_enabled(self.sfx_on)
+        self.persist()
 
     # --- управление стеком ---
     @property

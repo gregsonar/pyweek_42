@@ -79,6 +79,11 @@ class TimeController:
         self.debt = 0  # накопленный долг времени (тики)
         self._repay_at = None  # тик, на котором сработает возврат долга
         self._freeze_left = 0  # осталось тиков заморозки игрока
+        # Очередь событий переходов состояния (для хуков звука в сцене). Наполняется
+        # в _set_state и от игрока (toggle_freeze), и от мира (step); сцена сливает
+        # её через drain_events. Так звук привязан к РЕАЛЬНОЙ смене состояния:
+        # тоггл при пустом бюджете состояние не меняет - событие не создаётся.
+        self._events = []
 
     # --- флаги для остального кода ---
     @property
@@ -98,13 +103,13 @@ class TimeController:
             return
         self.state = new_state
         if new_state == STATE_WORLD_FROZEN:
-            print("time stopped for world", flush=True)
+            self._events.append("world_freeze")  # игрок остановил мир
         elif old == STATE_WORLD_FROZEN and new_state == STATE_NORMAL:
-            print("time resumed for world", flush=True)
+            self._events.append("world_unfreeze")  # мир снова пошёл
         elif new_state == STATE_PLAYER_FROZEN:
-            print("time stopped for player", flush=True)
+            self._events.append("player_freeze")  # мир заморозил игрока (возврат долга)
         elif old == STATE_PLAYER_FROZEN and new_state == STATE_NORMAL:
-            print("time resumed for player", flush=True)
+            self._events.append("player_unfreeze")  # заморозка игрока снята
 
     # --- ввод игрока ---
     def toggle_freeze(self):
@@ -141,9 +146,7 @@ class TimeController:
 
     def _schedule_repayment(self):
         """Запланировать возврат долга на случайный тик в заданных пределах."""
-        delay = self._rng.randint(
-            config.REPAY_INTERVAL_MIN, config.REPAY_INTERVAL_MAX
-        )
+        delay = self._rng.randint(config.REPAY_INTERVAL_MIN, config.REPAY_INTERVAL_MAX)
         self._repay_at = self.timer.tick + delay
 
     def _begin_repayment(self):
@@ -151,6 +154,17 @@ class TimeController:
         self._freeze_left = self.debt
         self._set_state(STATE_PLAYER_FROZEN)
         self._repay_at = None
+
+    def drain_events(self):
+        """Забрать и очистить накопленные события переходов состояния.
+
+        Возвращает список строк: "world_freeze"/"world_unfreeze" (мир остановлен/
+        пошёл игроком) и "player_freeze"/"player_unfreeze" (игрок заморожен/
+        разморожен при возврате долга). Сцена маппит их в звук.
+        """
+        events = self._events
+        self._events = []
+        return events
 
     # --- запросы для будущего HUD ---
     @property

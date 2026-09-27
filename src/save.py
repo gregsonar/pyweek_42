@@ -13,11 +13,15 @@ import sys
 _ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 SAVE_PATH = os.path.join(_ROOT, "save.json")
 
-_DEFAULT = {"language": None, "progress": None}
+_DEFAULT = {"language": None, "progress": None, "music_on": None, "sfx_on": None}
 
 
 class SaveData:
-    """Состояние сохранения: язык интерфейса и прогресс (номер уровня)."""
+    """Состояние сохранения: язык, прогресс (номер уровня) и аудио (музыка/эффекты).
+
+    music_on/sfx_on: None означает "не задано" - вызывающий берёт значение по
+    умолчанию из config (см. App). Иначе - сохранённый bool.
+    """
 
     def __init__(self, data=None):
         base = dict(_DEFAULT)
@@ -26,6 +30,8 @@ class SaveData:
         self.language = base.get("language")
         prog = base.get("progress")
         self.progress_level = prog.get("level") if isinstance(prog, dict) else None
+        self.music_on = base.get("music_on")
+        self.sfx_on = base.get("sfx_on")
 
     def has_progress(self):
         """Есть ли сохранённый прогресс (доступна ли кнопка 'Продолжить')."""
@@ -45,6 +51,8 @@ class SaveData:
                 if self.progress_level is not None
                 else None
             ),
+            "music_on": self.music_on,
+            "sfx_on": self.sfx_on,
         }
 
 

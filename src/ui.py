@@ -6,6 +6,7 @@ import pygame as pg
 from . import audio
 from . import config
 from .fonts import load_font
+from .i18n import tr
 
 
 class MenuItem:
@@ -24,6 +25,23 @@ class MenuItem:
     @property
     def enabled(self):
         return bool(self.enabled_fn())
+
+
+def audio_toggle_items(app):
+    """Пункты меню "Музыка"/"Звуки" с состоянием вкл/выкл (для меню и паузы).
+
+    Подпись пересобирается каждый кадр (реагирует на смену языка и состояния).
+    Действия дергают переключатели App (применяют к аудио и сохраняют).
+    """
+
+    def label(key, on):
+        state = tr("state_on" if on else "state_off", app.language)
+        return "%s: %s" % (tr(key, app.language), state)
+
+    return [
+        MenuItem(lambda: label("menu_music", app.music_on), app.toggle_music),
+        MenuItem(lambda: label("menu_sfx", app.sfx_on), app.toggle_sfx),
+    ]
 
 
 class Menu:
