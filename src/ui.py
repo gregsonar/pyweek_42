@@ -1,6 +1,3 @@
-# src/ui.py
-"""Простое меню: вертикальный список пунктов с навигацией клавиатурой и мышью."""
-
 import pygame as pg
 
 from . import audio
@@ -8,31 +5,19 @@ from . import config
 from .fonts import load_font
 from .i18n import tr
 
-
 class MenuItem:
-    """Пункт меню: подпись (функция -> строка), действие и признак активности.
-
-    Подпись - функция, чтобы текст пересобирался каждый кадр (например, при смене
-    языка). enabled_fn - функция, чтобы активность зависела от состояния игры.
-    """
 
     def __init__(self, text_fn, action, enabled_fn=None):
         self.text_fn = text_fn
         self.action = action
         self.enabled_fn = enabled_fn or (lambda: True)
-        self.rect = None  # прямоугольник последней отрисовки (для мыши)
+        self.rect = None
 
     @property
     def enabled(self):
         return bool(self.enabled_fn())
 
-
 def audio_toggle_items(app):
-    """Пункты меню "Музыка"/"Звуки" с состоянием вкл/выкл (для меню и паузы).
-
-    Подпись пересобирается каждый кадр (реагирует на смену языка и состояния).
-    Действия дергают переключатели App (применяют к аудио и сохраняют).
-    """
 
     def label(key, on):
         state = tr("state_on" if on else "state_off", app.language)
@@ -43,9 +28,7 @@ def audio_toggle_items(app):
         MenuItem(lambda: label("menu_sfx", app.sfx_on), app.toggle_sfx),
     ]
 
-
 class Menu:
-    """Вертикальное меню. Стрелки/WASD + Enter/Space, наведение и клик мышью."""
 
     def __init__(self, items, item_size=None, spacing=None):
         self.items = items
@@ -60,7 +43,6 @@ class Menu:
         return 0
 
     def move(self, delta):
-        """Сдвинуть выбор на активный пункт в направлении delta (+1/-1)."""
         n = len(self.items)
         if n == 0:
             return
@@ -75,7 +57,6 @@ class Menu:
                 return
 
     def activate(self):
-        """Выполнить действие выбранного пункта (если он активен)."""
         if 0 <= self.selected < len(self.items):
             item = self.items[self.selected]
             if item.enabled:
@@ -83,7 +64,6 @@ class Menu:
                 item.action()
 
     def handle_event(self, event):
-        """Навигация: клавиатура (стрелки/WASD/Enter) и мышь (наведение/клик)."""
         if event.type == pg.KEYDOWN:
             if event.key in (pg.K_UP, pg.K_w):
                 self.move(-1)
@@ -98,7 +78,6 @@ class Menu:
                 self.activate()
 
     def _hover(self, pos):
-        """Навести выбор на пункт под курсором. -> True, если попали в активный."""
         for idx, item in enumerate(self.items):
             if item.rect and item.rect.collidepoint(pos) and item.enabled:
                 if idx != self.selected:
@@ -108,7 +87,6 @@ class Menu:
         return False
 
     def draw(self, screen, center_x, top_y):
-        """Отрисовать пункты по центру от center_x, начиная с top_y. -> нижний y."""
         y = top_y
         line_h = self.font.get_height() + self.spacing
         for idx, item in enumerate(self.items):

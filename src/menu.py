@@ -1,6 +1,3 @@
-# src/menu.py
-"""Главное меню игры."""
-
 from . import config
 from .confirm import ConfirmScene
 from .credits import CreditsScene
@@ -10,13 +7,9 @@ from .main import GameplayScene
 from .scene import Scene
 from .ui import Menu, MenuItem, audio_toggle_items
 
-# Ключи строк подсказки "как играть" (по порядку сверху вниз). Отсутствующие
-# в i18n ключи пропускаются - можно оставить 2 строки вместо 3.
 _HOWTO_KEYS = ("menu_howto_1", "menu_howto_2", "menu_howto_3")
 
-
 class MainMenuScene(Scene):
-    """Заголовок, пункты меню и выбор языка. Курсор виден (мышь не захвачена)."""
 
     wants_mouse_grab = False
 
@@ -29,7 +22,7 @@ class MainMenuScene(Scene):
                 MenuItem(
                     lambda: tr("menu_continue", self.app.language),
                     self._continue,
-                    # активна только при наличии сохранённого прогресса
+
                     enabled_fn=lambda: self.app.save.has_progress(),
                 ),
                 MenuItem(
@@ -44,7 +37,7 @@ class MainMenuScene(Scene):
                     lambda: tr("menu_quit", self.app.language), self.app.quit
                 ),
             ],
-            # плотнее обычного: пунктов много (+музыка/звуки) и снизу блок подсказки
+
             spacing=config.MENU_ITEM_SPACING_COMPACT,
         )
 
@@ -59,7 +52,6 @@ class MainMenuScene(Scene):
         self.app.set_language("ru" if self.app.language == "en" else "en")
 
     def _new_game(self):
-        """Новая игра. При наличии прогресса - подтверждение (затрёт прогресс)."""
         if self.app.save.has_progress():
             self.app.push_scene(
                 ConfirmScene(self.app, "confirm_new_game", self._start_fresh)
@@ -68,13 +60,11 @@ class MainMenuScene(Scene):
             self._start_fresh()
 
     def _start_fresh(self):
-        """Начать с первого уровня, записав прогресс."""
         self.app.save.set_progress(1)
         self.app.persist()
         self.app.fade_to(GameplayScene(self.app, 0))
 
     def _continue(self):
-        """Продолжить с сохранённого уровня (прогресс - номер уровня, с 1)."""
         index = (self.app.save.progress_level or 1) - 1
         index = max(0, min(index, len(config.LEVELS) - 1))
         self.app.fade_to(GameplayScene(self.app, index))
@@ -97,11 +87,6 @@ class MainMenuScene(Scene):
         self._draw_howto(screen, w, h)
 
     def _draw_howto(self, screen, w, h):
-        """Блок "как играть": 2-3 строки из i18n, прижаты к низу экрана по центру.
-
-        Отсутствующие ключи пропускаются. Блок кладётся снизу вверх, чтобы не
-        зависеть от высоты меню и всегда помещаться на экране.
-        """
         lines = [
             tr(key, self.app.language) for key in _HOWTO_KEYS
             if has(key, self.app.language)
@@ -109,7 +94,7 @@ class MainMenuScene(Scene):
         if not lines:
             return
         line_h = self.help_font.get_height() + config.MENU_HELP_LINE_SPACING
-        # y нижней строки: отступ снизу; остальные - выше на line_h каждая
+
         bottom = h - config.MENU_HELP_BOTTOM_MARGIN
         for i, text in enumerate(reversed(lines)):
             label = self.help_font.render(text, True, config.MENU_HELP_COLOR)

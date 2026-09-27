@@ -1,6 +1,3 @@
-# src/pause.py
-"""Экран паузы (оверлей поверх игры)."""
-
 import pygame as pg
 
 from . import config
@@ -9,13 +6,7 @@ from .i18n import tr
 from .scene import Scene
 from .ui import Menu, MenuItem, audio_toggle_items
 
-
 class PauseScene(Scene):
-    """Пауза: затемняет игру и предлагает продолжить / в меню / выйти.
-
-    render_below=True - под паузой отрисовывается замороженный кадр игры (App
-    обновляет только верхнюю сцену, поэтому мир и таймер стоят).
-    """
 
     render_below = True
     wants_mouse_grab = False
@@ -42,15 +33,13 @@ class PauseScene(Scene):
         )
 
     def _resume(self):
-        """Снять паузу - вернуться в игру."""
         self.app.pop_scene()
 
     def _to_menu(self):
-        """Выйти в главное меню (снять паузу и заменить игру меню)."""
         from .menu import MainMenuScene
 
-        self.app.pop_scene()  # снять паузу
-        self.app.fade_to(MainMenuScene(self.app))  # игра -> меню с фейдом
+        self.app.pop_scene()
+        self.app.fade_to(MainMenuScene(self.app))
 
     def handle_events(self, events):
         for event in events:

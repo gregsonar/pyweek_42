@@ -1,197 +1,144 @@
-# src/config.py
-"""Глобальные настройки рендерера."""
-
 import math
 
 from .level import Level
 from .maze import generate_maze
 
-# Разрешения
 VIRT_WIDTH = 320
 VIRT_HEIGHT = 200
 WIN_WIDTH = 960
 WIN_HEIGHT = 600
 
-# Рендеринг
 TEX_SIZE = 64
-FOV = 0.6  # поле зрения в радианах
+FOV = 0.6
 FPS = 30
 
-# Высота уровня (два пояса стен). Потолок = CEILING_HEIGHT тайлов по высоте.
-# EYE_HEIGHT - высота глаза над полом; оставлена как раньше (0.5), чтобы игрок
-# стоял у пола, а весь прирост высоты уходил вверх (в потолок), а не поднимал
-# камеру. Пол и потолок при этом несимметричны и считаются раздельно.
 CEILING_HEIGHT = 2.0
 EYE_HEIGHT = 0.5
 
-# Режим верха (потолок или небо) задаётся на уровне - см. Level.sky_mode и
-# DEFAULT_LEVEL ниже. Здесь только тюнинг рендера неба.
-SKY_TILES = 3.0  # сколько раз текстура неба повторяется на 360 градусов
+SKY_TILES = 3.0
 
-# Рандомизация тайлов пола/потолка между двумя вариантами. Значение - доля
-# ВТОРОГО тайла (floor2 / ceil2). Пол 60/40 -> 0.4; потолок 80/20 -> 0.2. Выбор
-# пер-клеточный и фиксируется при старте уровня (стабилен между кадрами).
-FLOOR_VARIANT_SECOND = 0.4  # доля второго тайла пола (floor_grate_2)
-CEIL_VARIANT_SECOND = 0.2  # доля второго тайла потолка (ceiling_panel-2)
+FLOOR_VARIANT_SECOND = 0.4
+CEIL_VARIANT_SECOND = 0.2
 
-# Физика частиц
 SPARK_COUNT = 50
 SPARK_SPEED_MIN = 0.02
 SPARK_SPEED_MAX = 0.05
 SPARK_GRAVITY = 0.008
 SPARK_LIFE_DECAY = 0.05
 
-# God rays
 GOD_RAY_COUNT = 60
 
-# Освещение (все параметры затемнения/яркости сцены - здесь)
-BASE_BRIGHTNESS = 2.6  # базовая яркость сцены (когда не зажата ЛКМ)
-DEPTH_FALLOFF = 0.15  # скорость затемнения по расстоянию (больше = темнее вдаль)
-AMBIENT_FLOOR = 0.16  # минимальная подсветка (чтобы тени не были чёрными)
-VIGNETTE = 7.0  # базовая виньетка/фокус (меньше = светлее края)
+BASE_BRIGHTNESS = 2.6
+DEPTH_FALLOFF = 0.15
+AMBIENT_FLOOR = 0.16
+VIGNETTE = 7.0
 
-# Управление
 MOUSE_SENSITIVITY = 0.003
-MOVE_SPEED = 2.1  # единиц карты в секунду
-MAX_DT = 0.05  # максимальный шаг кадра (сек): защита от туннелирования при лаге
+MOVE_SPEED = 2.1
+MAX_DT = 0.05
 
-# Время и способность заёма времени (Borrowed Time)
-TICK_RATE = 60  # логических тиков в секунду (фиксированный шаг логики)
-MAX_TICKS_PER_FRAME = 5  # максимум тиков за кадр (защита от спирали смерти при лаге)
-FREEZE_BUDGET_TICKS = 180  # бюджет заморозки мира (тики; 180 = 3 с при 60 тик/с)
-REPAY_INTERVAL_MIN = 210  # мин. задержка до возврата долга (тики; 3 с)
-REPAY_INTERVAL_MAX = 720  # макс. задержка до возврата долга (тики; 12 с)
+TICK_RATE = 60
+MAX_TICKS_PER_FRAME = 5
+FREEZE_BUDGET_TICKS = 180
+REPAY_INTERVAL_MIN = 210
+REPAY_INTERVAL_MAX = 720
 
-# Игрок и ловушки
-PLAYER_MAX_HP = 3  # запас здоровья (обновляется при старте уровня)
-TRAP_ON_TICKS = 90  # тиков во включённом состоянии (1.5 с при 60 тик/с)
-TRAP_OFF_TICKS = 90  # тиков в выключенном состоянии
-TRAP_DAMAGE_PERIOD = TICK_RATE  # период урона при стоянии на активной (1/с)
-TRAP_OFF_DESATURATE = 0.65  # насколько обесцветить текстуру выключенной ловушки
-TRAP_OFF_DIM = 0.85  # затемнение выключенной ловушки (временно, пока 1 текстура)
-PLAYER_STUN_TICKS = round(0.3 * TICK_RATE)  # стан игрока при уроне (0.3 с)
+PLAYER_MAX_HP = 3
+TRAP_ON_TICKS = 90
+TRAP_OFF_TICKS = 90
+TRAP_DAMAGE_PERIOD = TICK_RATE
+TRAP_OFF_DESATURATE = 0.65
+TRAP_OFF_DIM = 0.85
+PLAYER_STUN_TICKS = round(0.3 * TICK_RATE)
 
-# Локализация интерфейса. Языки: "en", "ru". Переключение в игре - клавиша L.
 LANGUAGE = "en"
 
-# Аудио по умолчанию (переопределяется сохранением save.json). Музыка и эффекты
-# переключаются в главном меню и меню паузы; если оба выключены - тишина.
-AUDIO_MUSIC_DEFAULT = True  # музыка (саундтрек уровней) включена по умолчанию
-AUDIO_SFX_DEFAULT = True  # звуковые эффекты включены по умолчанию
-# Общий уровень громкости по категориям (0..1). Музыка тише эффектов, чтобы
-# эффекты были заметнее. MUSIC_VOLUME множит поток саундтрека, SFX_VOLUME -
-# разовые эффекты (гудение ловушки далее домножается на близость).
-MUSIC_VOLUME = 0.4  # громкость саундтрека
-SFX_VOLUME = 1.0  # громкость звуковых эффектов
+AUDIO_MUSIC_DEFAULT = True
+AUDIO_SFX_DEFAULT = True
 
-# Лимит времени на попытку по умолчанию (сек) - см. Level.time_limit.
+MUSIC_VOLUME = 0.4
+SFX_VOLUME = 1.0
+
 LEVEL_TIME_LIMIT = 90.0
 
-# Игровой шрифт (HomeVideo) - для HUD и всех экранов. Покрывает цифры, латиницу
-# и кириллицу. При сбое загрузки файла - системный фолбэк.
 FONT_PATH = "assets/fonts/HomeVideo-Regular.ttf"
 HUD_FONT_FALLBACK = "segoeui,dejavusans,arial"
-# Символьный шрифт только для плейсхолдеров HP (♥/♡): в HomeVideo этих глифов
-# нет (рисуется "тофу"). Уйдёт, когда HP заменим на реальные иконки.
+
 HUD_SYMBOL_FONT_NAME = "segoeuisymbol,dejavusans,arial"
 
-# HUD (интерфейс поверх сцены; рисуется в разрешении окна после масштаба)
-HUD_TIMER_SIZE = 40  # кегль шрифта таймера (верх по центру)
-HUD_TEXT_SIZE = 24  # кегль шрифта строки текста (верх справа)
-HUD_HP_SIZE = 34  # кегль шрифта иконок здоровья (низ слева)
-HUD_MARGIN = 12  # отступ HUD от краёв экрана (пиксели окна)
-HUD_COLOR = (230, 230, 230)  # основной цвет текста HUD
-HUD_TIMER_FROZEN_COLOR = (120, 210, 255)  # цвет таймера при остановленном мире
-HUD_HP_FULL_COLOR = (235, 80, 80)  # цвет символа оставшегося HP (♥)
-HUD_HP_LOST_COLOR = (110, 110, 110)  # цвет символа потерянного HP (♡)
-HUD_SHADOW_COLOR = (0, 0, 0)  # цвет тени под текстом (для читаемости)
+HUD_TIMER_SIZE = 40
+HUD_TEXT_SIZE = 24
+HUD_HP_SIZE = 34
+HUD_MARGIN = 12
+HUD_COLOR = (230, 230, 230)
+HUD_TIMER_FROZEN_COLOR = (120, 210, 255)
+HUD_HP_FULL_COLOR = (235, 80, 80)
+HUD_HP_LOST_COLOR = (110, 110, 110)
+HUD_SHADOW_COLOR = (0, 0, 0)
 
-# Маска урона (полноэкранная вспышка при получении урона)
-DAMAGE_FLASH_COLOR = (200, 0, 0)  # цвет вспышки
-DAMAGE_FLASH_MAX_ALPHA = 140  # максимальная альфа вспышки (0..255)
-DAMAGE_FLASH_FADE = 2.5  # скорость затухания вспышки (единиц в секунду)
+DAMAGE_FLASH_COLOR = (200, 0, 0)
+DAMAGE_FLASH_MAX_ALPHA = 140
+DAMAGE_FLASH_FADE = 2.5
 
-# Пауза проигрыша (HP=0 или вышло время): держим маску урона, потом рестарт
-FAIL_PAUSE_SECONDS = 2.0  # длительность паузы перед рестартом (сек)
+FAIL_PAUSE_SECONDS = 2.0
 
-# Гудение активной спрайтовой ловушки (BatteryTrap): громкость по близости к
-# ближайшей активной ловушке. На расстоянии 0 клеток - полная, дальше линейно
-# спадает до нуля на BUZZ_MAX_DIST клетках. 0 или меньше - гудение выключено.
-BUZZ_MAX_DIST = 6.0  # дальность слышимости гудения (клетки)
+BUZZ_MAX_DIST = 6.0
 
-# Маска заморозки игрока (возврат долга): синяя, пульсирует, пока игрок заморожен
-FREEZE_MASK_COLOR = (30, 90, 220)  # цвет маски заморозки игрока
-FREEZE_MASK_MIN_ALPHA = 35  # альфа в нижней точке пульса (0..255)
-FREEZE_MASK_MAX_ALPHA = 105  # альфа в верхней точке пульса (0..255)
-FREEZE_MASK_PULSE_HZ = 1.1  # частота пульсации (Гц)
-FREEZE_MASK_FADE = 6.0  # скорость плавного появления/угасания (единиц в секунду)
+FREEZE_MASK_COLOR = (30, 90, 220)
+FREEZE_MASK_MIN_ALPHA = 35
+FREEZE_MASK_MAX_ALPHA = 105
+FREEZE_MASK_PULSE_HZ = 1.1
+FREEZE_MASK_FADE = 6.0
 
-# Вводное сообщение уровня (показывается при первом входе)
-LEVEL_MSG_SECONDS = 3.0  # длительность вводного сообщения уровня (сек)
+LEVEL_MSG_SECONDS = 3.0
 
-# Шкала баланса заёма времени (полоса под таймером; длина = остаток бюджета,
-# сужается симметрично к центру до BUDGET_BAR_MIN_WIDTH при пустом балансе)
-BUDGET_BAR_WIDTH = 140  # полная длина шкалы (px) при полном бюджете
-BUDGET_BAR_MIN_WIDTH = 3  # длина шкалы (px) при пустом бюджете
-BUDGET_BAR_HEIGHT = 6  # толщина шкалы (px)
-BUDGET_BAR_GAP = 6  # зазор между таймером и шкалой (px)
-BUDGET_BAR_COLOR = HUD_TIMER_FROZEN_COLOR  # цвет шкалы (как таймер при заморозке)
+BUDGET_BAR_WIDTH = 140
+BUDGET_BAR_MIN_WIDTH = 3
+BUDGET_BAR_HEIGHT = 6
+BUDGET_BAR_GAP = 6
+BUDGET_BAR_COLOR = HUD_TIMER_FROZEN_COLOR
 
-# Меню и экраны (рисуются в разрешении окна)
-MENU_BG_COLOR = (12, 14, 20)  # фон экранов меню
-MENU_TITLE_SIZE = 64  # кегль заголовка
+MENU_BG_COLOR = (12, 14, 20)
+MENU_TITLE_SIZE = 64
 MENU_TITLE_COLOR = (235, 240, 250)
-MENU_ITEM_SIZE = 32  # кегль пунктов меню
-MENU_ITEM_SPACING = 16  # доп. зазор между пунктами (px)
-MENU_ITEM_SPACING_COMPACT = 12  # уплотнённый зазор (главное меню: много пунктов)
-MENU_COLOR = (200, 205, 215)  # обычный пункт
-MENU_COLOR_SELECTED = (120, 210, 255)  # выбранный пункт (в тон HUD-заморозке)
-MENU_COLOR_DISABLED = (90, 95, 105)  # неактивный пункт
-# Титры: базовый кегль строк. Реальный шаг подгоняется под высоту экрана
-# (список может расти), а длинные строки ужимаются по ширине - см. credits.py.
-CREDITS_LINE_SIZE = 22  # базовый кегль строки титров
-# Подсказка "как играть" в главном меню (2-3 строки, прижаты к низу экрана)
-MENU_HELP_SIZE = 20  # кегль строк подсказки
-MENU_HELP_COLOR = (150, 158, 172)  # приглушённый цвет строк подсказки
-MENU_HELP_LINE_SPACING = 6  # доп. зазор между строками подсказки (px)
-MENU_HELP_BOTTOM_MARGIN = 24  # отступ блока подсказки от низа экрана (px)
-PAUSE_TITLE_SIZE = 52  # кегль заголовка паузы
-PAUSE_DIM_COLOR = (0, 0, 0)  # цвет затемнения игры под паузой
-PAUSE_DIM_ALPHA = 170  # альфа затемнения (0..255)
+MENU_ITEM_SIZE = 32
+MENU_ITEM_SPACING = 16
+MENU_ITEM_SPACING_COMPACT = 12
+MENU_COLOR = (200, 205, 215)
+MENU_COLOR_SELECTED = (120, 210, 255)
+MENU_COLOR_DISABLED = (90, 95, 105)
 
-# Переходы между сценами (фейд через чёрное)
-FADE_DURATION = 0.25  # длительность половины перехода (сек): затемнение/проявление
-FADE_COLOR = (0, 0, 0)  # цвет затемнения перехода
+CREDITS_LINE_SIZE = 22
 
-# Сплеш-заставка при запуске (фикс. длительность + скип любой клавишей/кликом)
-SPLASH_LOGO_PATH = "assets/logo.png"  # опц.; иначе текст-заглушка
-SPLASH_TITLE_SIZE = 72  # кегль текста-заглушки (когда нет лого)
-SPLASH_FADE_IN = 0.7  # сек появления
-SPLASH_HOLD = 1.6  # сек показа на полной яркости
-SPLASH_FADE_OUT = 0.7  # сек угасания
+MENU_HELP_SIZE = 20
+MENU_HELP_COLOR = (150, 158, 172)
+MENU_HELP_LINE_SPACING = 6
+MENU_HELP_BOTTOM_MARGIN = 24
+PAUSE_TITLE_SIZE = 52
+PAUSE_DIM_COLOR = (0, 0, 0)
+PAUSE_DIM_ALPHA = 170
 
-# Взаимодействие с объектами
-INTERACT_RADIUS = 2.5  # максимальная дистанция взаимодействия (клетки)
-OBJECT_BLOCK_RADIUS = 0.35  # радиус блокировки прохода твёрдым объектом
-HIGHLIGHT_BRIGHTNESS = 1.3  # множитель яркости подсвеченного объекта
-SPRITE_NEAR_CLIP = 0.1  # ближняя отсечка для билбордов
+FADE_DURATION = 0.25
+FADE_COLOR = (0, 0, 0)
 
-# Карта по умолчанию (14×11). Задействованы все 15 стеновых тайлов (id 1..15).
-# Крайние клетки - всегда стены. Панорама-окно (11..15) и консоль (9,10)
-# стоят в соседних клетках северной стены строго по порядку слева направо.
-# Внутренняя перегородка (строка 5) делит зал на две половины с проёмом,
-# в котором стоит дверь.
-#
-# id: 1 бетон_01, 2 бетон_02, 3 бетон_мох, 4 постер_шаман, 5 постер_шлем,
-#     6 ферма, 7 вентиляция, 8 терминал, 9 консоль_0, 10 консоль_1,
-#     11..15 панорама-окно (тайлы 1..5)
+SPLASH_LOGO_PATH = "assets/logo.png"
+SPLASH_TITLE_SIZE = 72
+SPLASH_FADE_IN = 0.7
+SPLASH_HOLD = 1.6
+SPLASH_FADE_OUT = 0.7
+
+INTERACT_RADIUS = 2.5
+OBJECT_BLOCK_RADIUS = 0.35
+HIGHLIGHT_BRIGHTNESS = 1.3
+SPRITE_NEAR_CLIP = 0.1
+
 DEFAULT_MAP = [
     [1, 1, 15, 16, 1, 1, 1, 1, 9, 8, 10, 1, 1, 1],
     [1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 12],
     [7, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 2],
     [1, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 1, 0, 3],
     [11, 0, 0, 2, 0, 0, 0, 0, 0, 0, 0, 1, 0, 2],
-    [2, 1, 1, 1, 1, 1, 0, 1, 1, 14, 1, 1, 1, 3],  # перегородка с проёмом (x=6)
+    [2, 1, 1, 1, 1, 1, 0, 1, 1, 14, 1, 1, 1, 3],
     [3, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 2],
     [2, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 3],
     [3, 0, 5, 0, 0, 0, 0, 0, 0, 1, 1, 0, 1, 2],
@@ -199,49 +146,31 @@ DEFAULT_MAP = [
     [1, 4, 5, 1, 10, 1, 7, 1, 3, 1, 23, 23, 23, 1],
 ]
 
-
-# Стартовая позиция игрока (в северной половине, взгляд на север - к панораме)
 PLAYER_START = {"x": 9.5, "y": 3, "angle": -math.pi / 2}
 
-
-# Верхний пояс стен (z 1..2) строится из нижнего. Для каждого типа нижнего блока
-# задаётся, какой блок верхнего пояса ставить над ним по умолчанию
-# (UPPER_BY_LOWER). Нижние блоки без записи получают UPPER_DEFAULT; пустые
-# клетки (0) остаются пустыми. Чтобы поменять верх над типом блока - правим здесь.
-UPPER_DEFAULT = 21  # верхний тайл по умолчанию (бетон_01_up)
+UPPER_DEFAULT = 21
 UPPER_BY_LOWER = {
-    1: 21,  # бетон_01 -> бетон_01_up
-    2: 22,  # бетон_02 -> бетон_02_up
-    11: 21,  # окно_0 -> окно_0_up
-    12: 13,  # окно_1 -> окно_1_up
-    # 13: 18,  # окно_2 -> окно_2_up
-    # 14: 19,  # окно_3 -> окно_3_up
-    # 15: 20,  # окно_4 -> окно_4_up
+    1: 21,
+    2: 22,
+    11: 21,
+    12: 13,
+
 }
 
-# Ручные переопределения верхнего пояса: (строка, столбец) -> id верхнего тайла.
-# Приоритетнее UPPER_BY_LOWER и работают даже над пустой нижней клеткой (для
-# висящих блоков и перемычек). Сюда - точечные исключения.
 UPPER_OVERRIDES = {
-    (5, 6): 21,  # перемычка над проёмом двери (низ пустой)
-    (3, 5): 21,  # ТЕСТ: висящий блок (низ пустой)
-    (8, 11): 21,  # над консолью_0 - бетон_02
-    # (0, 9): 2,  # над консолью_1 - бетон_02
+    (5, 6): 21,
+    (3, 5): 21,
+    (8, 11): 21,
+
 }
 
-# Кастомные тайлы пола на отдельных клетках: (строка, столбец) -> ключ текстуры
-# (ключи см. в texture_paths, GameplayScene). Перекрывают обычный пол и его
-# варианты; ловушки рисуются поверх этих клеток (динамически).
 FLOOR_OVERRIDES = {
-    (9, 10): "floor_outside",  # пол ниши с окном
+    (9, 10): "floor_outside",
     (9, 11): "floor_outside",
     (9, 12): "floor_outside",
 }
 
-
 def _build_upper_map(lower, upper_overrides={}):
-    """Верхний пояс из нижнего: тайл по умолчанию (UPPER_BY_LOWER / UPPER_DEFAULT)
-    плюс ручные переопределения UPPER_OVERRIDES (имеют приоритет)."""
     upper = [
         [UPPER_BY_LOWER.get(v, UPPER_DEFAULT) if v > 0 else 0 for v in row]
         for row in lower
@@ -250,18 +179,8 @@ def _build_upper_map(lower, upper_overrides={}):
         upper[row][col] = tile
     return upper
 
-
 DEFAULT_MAP_UPPER = _build_upper_map(DEFAULT_MAP, UPPER_OVERRIDES)
 
-
-# --- Объекты уровня 1: дата-таблицы (совместимо с дизайнером уровней) ---
-# Загрузчики - в GameplayScene (_load_props / _load_interactables / _load_traps).
-# Пути к спрайтам - относительно assets/textures/ (например "sprites/window.png").
-
-# PROPS: (file, w, h, x, y, y_offset, solid, block_radius[, angle[, billboard]]).
-# Сторона квадрата = max(w, h). block_radius=None -> дефолт OBJECT_BLOCK_RADIUS.
-# angle (опц., радианы) - поворот плоской поверхности; billboard (опц.) -> спрайт
-# всегда лицом к игроку (angle тогда не важен).
 PROPS = [
     ("sprites/spr_plant.png", 0.62, 0.85, 10.5, 1.6, 0.0, True, None, None, True),
     ("sprites/spr_plant.png", 0.62, 0.85, 7.5, 1.6, 0.0, True, None, None, True),
@@ -269,7 +188,7 @@ PROPS = [
     ("sprites/spr_garbage_1.png", 1.00, 1.05, 5.0, 9.5, 0.0, True, None),
     ("sprites/spr_garbage_1.png", 0.55, 0.34, 7.0, 7.7, 0.0, True, None),
     ("sprites/spr_wires_1.png", 0.85, 0.52, 9.5, 7.5, 1.0, False, None),
-    # второй spr_wires_1 повёрнут на 90 градусов
+
     (
         "sprites/spr_wires_1.png",
         0.85,
@@ -297,10 +216,6 @@ PROPS = [
     ("sprites/spr_window.png", 1, 1, 11.5, 0.5, 0.0, True, 0.6),
 ]
 
-# INTERACTABLES: {kind, x, y, angle, width, height, y_offset, cyclic, <файлы>}.
-# kind: "button" (кнопка, id для ссылок; файлы off/on - иначе заглушка),
-# "locked_door" (запираемая, button=id управляющей кнопки; файлы locked/closed/
-# open), "door" (closed/open), "exit" (closed - по E завершает уровень).
 INTERACTABLES = [
     {
         "kind": "button",
@@ -342,10 +257,6 @@ INTERACTABLES = [
     },
 ]
 
-# TRAPS: (x, y, intervals_ms, start_active). intervals_ms - список длительностей
-# фаз в миллисекундах: фазы чередуются вкл/выкл начиная со start_active, список
-# зациклен. Пример: [2000,1000,3500,2000] при True = 2с вкл,1с выкл,3.5с вкл,2с
-# выкл, повтор. Текстуры ловушек - на стороне игры.
 TRAPS = [
     (6, 3, [1500, 1500], True),
     (6, 4, [1500, 1500, 2000, 500], True),
@@ -353,21 +264,15 @@ TRAPS = [
     (8, 9, [2000, 1000, 500, 3000], False),
 ]
 
-# BATTERY_TRAPS: (x, y, intervals_ms, start_active). Тот же формат циклов, что у
-# TRAPS, но ловушка стоит вертикальным спрайтом в центре клетки и НЕ блокирует
-# проход. Урон - по клетке в состоянии on (как у напольной). Спрайты on/off - на
-# стороне игры (spr_batteryTrap_on/off). Активная ловушка гудит (см. BUZZ_MAX_DIST).
 BATTERY_TRAPS = [
     (4, 4, [1800, 1200], True),
 ]
 
-
-# Уровень 1: карты + старт + объекты (дата-таблицы выше).
 LEVEL1 = Level(
     lower_map=DEFAULT_MAP,
     upper_map=DEFAULT_MAP_UPPER,
     player_start=PLAYER_START,
-    sky_mode=False,  # True - небо (параллакс); False - потолок
+    sky_mode=False,
     time_limit=LEVEL_TIME_LIMIT,
     number=1,
     props=PROPS,
@@ -379,10 +284,6 @@ LEVEL1 = Level(
     music_loop=True,
 )
 
-
-# Уровень 2: лабиринт (рекурсивный бэктрекинг), >=15 клеток по длинной стороне,
-# с тупиками. Старт в углу (0,0), выход - в дальнем углу; одна ловушка в проходе
-# для примера. Сид фиксирован, чтобы уровень был стабильным.
 _MAZE_GRID, _MAZE_START, _MAZE_ANGLE, _MAZE_EXIT = generate_maze(
     cw=9, ch=7, seed=42, wall_id=1
 )
@@ -392,13 +293,12 @@ _MAZE_GRID[7][10] = 2
 _MAZE_GRID[10][17] = 7
 _MAZE_GRID[6][15] = 7
 
-# PROPS: (file, w, h, x, y, y_offset, solid, block_radius[, angle[, billboard]]).
 LEVEL2_PROPS = [
     ("sprites/spr_plant.png", 0.62, 0.85, 10.5, 1.6, 0.0, True, None, None, True),
     ("sprites/spr_plant.png", 0.62, 0.85, 7, 1.6, 0.0, True, None, None, True),
     ("sprites/spr_bottles_1.png", 1.20, 0.82, 3.5, 8.5, 0.0, False, None),
-    # ("sprites/spr_window.png", 1, 1, 3, 6.5, 0, True, 0.4, math.radians(90)),
-    ("sprites/spr_garbage_1.png", 0.80, 0.85, 3.3, 9.5, 0.0, True, 0.4, 0, True),  #
+
+    ("sprites/spr_garbage_1.png", 0.80, 0.85, 3.3, 9.5, 0.0, True, 0.4, 0, True),
     ("sprites/spr_garbage_1.png", 0.55, 0.34, 7.0, 7.2, 0.0, False, True),
     ("sprites/spr_wires_1.png", 0.85, 0.52, 7.5, 10.5, 1.0, False, None),
 ]
@@ -412,7 +312,7 @@ LEVEL2 = Level(
     number=2,
     props=LEVEL2_PROPS,
     interactables=[
-        # Выход - билборд (всегда лицом к игроку): удобно в лабиринте
+
         {
             "kind": "exit",
             "x": _MAZE_EXIT[0],
@@ -432,7 +332,7 @@ LEVEL2 = Level(
         (11, 1, [1000, 500, 2000, 500], True),
     ],
     floor_overrides={},
-    music="sonic_drive_slow.wav",  # файл в assets/music (тишина, пока файла нет)
+    music="sonic_drive_slow.wav",
     music_loop=False,
 )
 
@@ -493,7 +393,7 @@ LEVEL4 = Level(
         (3, 29, [1000, 900], True),
     ],
     floor_overrides={},
-    music="sonic_drive_fast.wav",  # файл в assets/music (тишина, пока файла нет)
+    music="sonic_drive_fast.wav",
     music_loop=True,
 )
 
@@ -530,7 +430,7 @@ LEVEL3_START = {"x": 1.5, "y": 1.2, "angle": 0}
 LEVEL3_PROPS = [
     ("sprites/spr_bottles_1.png", 1, 1, 10.5, 4.5, 0.0, False, None),
     ("sprites/spr_bottles_1.png", 0.8, 0.8, 10.5, 6.1, 0.0, False, None),
-    ("sprites/spr_garbage_1.png", 0.80, 0.85, 7.3, 9.5, 0.0, True, 0.4, 0, True),  #
+    ("sprites/spr_garbage_1.png", 0.80, 0.85, 7.3, 9.5, 0.0, True, 0.4, 0, True),
 ]
 
 LEVEL3_BATTERY_TRAPS = [
@@ -660,7 +560,7 @@ LEVEL3 = Level(
     lower_map=LEVEL3_MAP,
     upper_map=_build_upper_map(LEVEL3_MAP, LEVEL3_UPPER_OVERRIDES),
     player_start=LEVEL3_START,
-    sky_mode=True,  # True - небо (параллакс); False - потолок
+    sky_mode=True,
     time_limit=45,
     number=3,
     props=LEVEL3_PROPS,
@@ -668,7 +568,7 @@ LEVEL3 = Level(
     traps=LEVEL3_TRAPS,
     battery_traps=LEVEL3_BATTERY_TRAPS,
     floor_overrides=LEVEL3_FLOOR_OVERRIDES,
-    music="sonic_drive_slow.wav",  # файл в assets/music (тишина, пока файла нет)
+    music="sonic_drive_slow.wav",
     music_loop=True,
 )
 
@@ -723,7 +623,6 @@ LEVEL5_FLOOR_OVERRIDES = {
 
 LEVEL5_START = {"x": 1.5, "y": 1.5, "angle": 90}
 
-# PROPS: (file, w, h, x, y, y_offset, solid, block_radius)
 LEVEL5_PROPS = [
     ("sprites/spr_window.png", 1, 1, 3, 6.5, 0, True, 0.4, math.radians(90)),
     ("walls/wall_concrete_01_up.png", 1, 1, 3, 6.5, 1, True, 0.4, math.radians(90)),
@@ -745,7 +644,6 @@ LEVEL5_INTERACTABLES = [
     },
 ]
 
-# TRAPS: (x, y, on_ticks, off_ticks, start_active)
 LEVEL5_TRAPS = [
     (2, 4, [90, 90], True),
     (1, 4, [90, 90], True),
@@ -779,7 +677,7 @@ LEVEL5 = Level(
     lower_map=LEVEL5_MAP,
     upper_map=_build_upper_map(LEVEL5_MAP, LEVEL5_UPPER_OVERRIDES),
     player_start=LEVEL5_START,
-    sky_mode=True,  # True - небо (параллакс); False - потолок
+    sky_mode=True,
     time_limit=45,
     number=5,
     props=LEVEL5_PROPS,
@@ -787,9 +685,9 @@ LEVEL5 = Level(
     traps=LEVEL5_TRAPS,
     floor_overrides=LEVEL5_FLOOR_OVERRIDES,
     battery_traps=LEVEL5_BATTERY_TRAPS,
-    music="sonic_drive_fast.wav",  # файл в assets/music (тишина, пока файла нет)
+    music="sonic_drive_fast.wav",
     music_loop=False,
 )
-# Список уровней (по порядку прохождения) и алиас на первый.
+
 LEVELS = [LEVEL1, LEVEL2, LEVEL3, LEVEL4, LEVEL5]
 DEFAULT_LEVEL = LEVEL1

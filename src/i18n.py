@@ -1,11 +1,6 @@
-# src/i18n.py
-"""Локализация строк интерфейса (английский и русский)."""
-
 DEFAULT_LANGUAGE = "en"
 LANGUAGES = ("en", "ru")
 
-# Таблицы строк по языкам. Ключ - идентификатор строки, значение - шаблон
-# (поддерживает подстановку через str.format, например {n}).
 STRINGS = {
     "en": {
         "level": "Level {n}",
@@ -15,7 +10,7 @@ STRINGS = {
         "level_4_msg": "Run!",
         "level_5_msg": "Watch out for live wires!",
         "time_up": "Time's up!",
-        # Меню и экраны
+
         "game_title": "ChronoKhryshch",
         "menu_new_game": "New Game",
         "menu_continue": "Continue",
@@ -25,7 +20,7 @@ STRINGS = {
         "state_on": "On",
         "state_off": "Off",
         "menu_quit": "Quit",
-        # Подсказка "как играть" в главном меню (2-3 строки)
+
         "menu_howto_1": "Move: WASD (you know, just like in games...), look with the mouse.",
         "menu_howto_2": "E - interact, F freezes the time (but you'll have to pay off your debt of time)",
         "menu_howto_3": "Find your way out of ChronoKhrushchevka before time swallows you up!",
@@ -56,7 +51,7 @@ STRINGS = {
         "level_4_msg": "Беги!",
         "level_5_msg": "Берегись оголённых проводов!",
         "time_up": "Время вышло!",
-        # Меню и экраны
+
         "game_title": "ХроноХрущ",
         "menu_new_game": "Новая игра",
         "menu_continue": "Продолжить",
@@ -66,7 +61,7 @@ STRINGS = {
         "state_on": "Вкл",
         "state_off": "Выкл",
         "menu_quit": "Выход",
-        # Подсказка "как играть" в главном меню (2-3 строки)
+
         "menu_howto_1": "Движение: WASD (знаете, ну как в играх...), обзор - мышью.",
         "menu_howto_2": "E - взаимодействие, F останавливает время (но долги времени придётся вернуть).",
         "menu_howto_3": "Доберись до выхода из ХроноХрущёвки, пока время не поглотило тебя!",
@@ -91,20 +86,11 @@ STRINGS = {
     },
 }
 
-
 def has(key, language=DEFAULT_LANGUAGE):
-    """Есть ли строка с таким ключом (в языке или в языке по умолчанию)."""
     table = STRINGS.get(language) or {}
     return key in table or key in STRINGS[DEFAULT_LANGUAGE]
 
-
 def tr(key, language=DEFAULT_LANGUAGE, **fmt):
-    """
-    Строка по ключу для указанного языка.
-
-    Неизвестный язык -> язык по умолчанию. Неизвестный ключ -> сам ключ.
-    Ошибки подстановки -> шаблон без подстановки (чтобы HUD не падал).
-    """
     table = STRINGS.get(language) or STRINGS[DEFAULT_LANGUAGE]
     template = table.get(key)
     if template is None:

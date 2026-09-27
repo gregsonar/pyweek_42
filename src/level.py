@@ -1,29 +1,17 @@
-# src/level.py
-"""Данные уровня, сгруппированные в один объект."""
-
 from dataclasses import dataclass, field
-
 
 @dataclass
 class Level:
-    """
-    Один уровень: карты стен, старт игрока, режим верха и объекты.
-
-    Режим верха (потолок или небо) - свойство уровня, а не глобальная
-    настройка движка: разные уровни могут его выбирать по-своему. Объекты
-    (props/interactables/traps) и floor_overrides - дата-таблицы уровня
-    (совместимы с дизайнером уровней), грузятся загрузчиками GameplayScene.
-    """
-    lower_map: list           # нижний пояс стен (id клеток)
-    upper_map: list           # верхний пояс стен (id клеток), та же форма
-    player_start: dict        # {"x": ..., "y": ..., "angle": ...}
-    sky_mode: bool = False    # True - небо (параллакс), False - потолок
-    time_limit: float = 90.0  # лимит времени на одну попытку (сек)
-    number: int = 1           # номер уровня (для строки HUD)
-    props: list = field(default_factory=list)          # декор (дата-таблица)
-    interactables: list = field(default_factory=list)  # объекты (дата-таблица)
-    traps: list = field(default_factory=list)          # напольные ловушки (данные)
-    battery_traps: list = field(default_factory=list)  # спрайтовые ловушки (данные)
-    floor_overrides: dict = field(default_factory=dict)  # кастомный пол по клеткам
-    music: str = ""           # саундтрек уровня (файл в assets/music; "" - без музыки)
-    music_loop: bool = True   # зациклить трек (True) или проиграть один раз (False)
+    lower_map: list
+    upper_map: list
+    player_start: dict
+    sky_mode: bool = False
+    time_limit: float = 90.0
+    number: int = 1
+    props: list = field(default_factory=list)
+    interactables: list = field(default_factory=list)
+    traps: list = field(default_factory=list)
+    battery_traps: list = field(default_factory=list)
+    floor_overrides: dict = field(default_factory=dict)
+    music: str = ""
+    music_loop: bool = True

@@ -1,27 +1,13 @@
-# src/save.py
-"""Портативное сохранение: язык интерфейса и прогресс в save.json рядом с игрой.
-
-Файл лежит в корне проекта (рядом с run.py). Если запись невозможна (например,
-папка только для чтения рядом с exe) - предупреждаем и продолжаем в памяти.
-"""
-
 import json
 import os
 import sys
 
-# Корень проекта (на уровень выше пакета src) - "рядом с игрой"
 _ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 SAVE_PATH = os.path.join(_ROOT, "save.json")
 
 _DEFAULT = {"language": None, "progress": None, "music_on": None, "sfx_on": None}
 
-
 class SaveData:
-    """Состояние сохранения: язык, прогресс (номер уровня) и аудио (музыка/эффекты).
-
-    music_on/sfx_on: None означает "не задано" - вызывающий берёт значение по
-    умолчанию из config (см. App). Иначе - сохранённый bool.
-    """
 
     def __init__(self, data=None):
         base = dict(_DEFAULT)
@@ -34,7 +20,6 @@ class SaveData:
         self.sfx_on = base.get("sfx_on")
 
     def has_progress(self):
-        """Есть ли сохранённый прогресс (доступна ли кнопка 'Продолжить')."""
         return self.progress_level is not None
 
     def set_progress(self, level):
@@ -55,18 +40,14 @@ class SaveData:
             "sfx_on": self.sfx_on,
         }
 
-
 def load():
-    """Загрузить сохранение (или значения по умолчанию при отсутствии/ошибке)."""
     try:
         with open(SAVE_PATH, "r", encoding="utf-8") as fh:
             return SaveData(json.load(fh))
     except (OSError, ValueError):
         return SaveData()
 
-
 def persist(data):
-    """Записать сохранение. Молча предупреждает при невозможности записи."""
     try:
         with open(SAVE_PATH, "w", encoding="utf-8") as fh:
             json.dump(data.to_dict(), fh, ensure_ascii=False, indent=2)

@@ -1,6 +1,3 @@
-# src/renderer.py
-"""Логика рендеринга: геометрия, пост-обработка, эффекты."""
-
 import numpy as np
 import pygame as pg
 import math
@@ -8,24 +5,19 @@ import random
 from . import config
 from .utils import clamp
 
-
 class Renderer:
-    """Основной класс рендерера."""
 
     def __init__(self, textures, game_map, upper_map=None, sky_mode=False):
         self.textures = textures
         self.map = np.array(game_map, dtype=int)
         self.map_h, self.map_w = self.map.shape
-        self.sky_mode = sky_mode  # True - небо параллаксом вместо потолка
-        # Верхний пояс стен (z 1..2). Если не задан - совпадает с нижним.
+        self.sky_mode = sky_mode
+
         if upper_map is not None:
             self.upper_map = np.array(upper_map, dtype=int)
         else:
             self.upper_map = self.map.copy()
 
-        # Два варианта тайлов пола/потолка + пер-клеточный выбор варианта.
-        # Выбор фиксируется здесь (при создании уровня), поэтому стабилен между
-        # кадрами. Значение config.*_VARIANT_SECOND - доля второго тайла.
         self._floor_texes = [
             self.textures['floor'],
             self.textures.get('floor2', self.textures['floor']),
@@ -37,21 +29,17 @@ class Renderer:
         self._floor_variant = self._build_variant_map(config.FLOOR_VARIANT_SECOND)
         self._ceil_variant = self._build_variant_map(config.CEIL_VARIANT_SECOND)
 
-        # Буферы
         self.z_buffer = np.full((config.VIRT_WIDTH, config.VIRT_HEIGHT),
                                 99.0, dtype=np.float32)
 
-        # Кеш координатных сеток для пост-обработки (константы по разрешению)
         _xs = np.linspace(-0.5, 0.5, config.VIRT_WIDTH)
         _ys = np.linspace(-0.5, 0.5, config.VIRT_HEIGHT)
         xm, ym = np.meshgrid(_xs, _ys, indexing='ij')
-        self._r2 = (xm ** 2 + ym ** 2).astype(np.float32)  # квадрат радиуса
+        self._r2 = (xm ** 2 + ym ** 2).astype(np.float32)
 
-        # God rays параметры
         self._init_god_rays()
 
     def _init_god_rays(self):
-        """Инициализация параметров лучей."""
         self.ray_angles = [random.uniform(0, math.pi * 2)
                            for _ in range(config.GOD_RAY_COUNT)]
         self.ray_phases = [random.uniform(0, math.pi * 2)
@@ -60,82 +48,54 @@ class Renderer:
                           for _ in range(config.GOD_RAY_COUNT)]
 
     def _build_variant_map(self, second_share):
-        """Пер-клеточная карта варианта тайла (0 или 1).
-
-        1 (второй вариант) выпадает с вероятностью second_share, независимо для
-        каждой клетки. Форма совпадает с картой уровня.
-        """
         rnd = np.random.random((self.map_h, self.map_w))
         return (rnd < second_share).astype(np.int8)
 
     def begin_frame(self):
-        """Сброс z-буфера перед рендерингом нового кадра."""
         self.z_buffer.fill(99.0)
 
     def render_floor_ceiling(self, frame, px, py, pa, floor_tiles=None):
-        """
-        Отрисовка пола и потолка методом проекции.
-
-        Глаз на высоте EYE_HEIGHT над полом, потолок на CEILING_HEIGHT. Так как
-        глаз не в центре, пол и потолок несимметричны и считаются раздельно:
-        пол - на глубину eye/(y-горизонт), потолок - (CEILING-eye)/(горизонт-y).
-
-        floor_tiles - опциональный dict {(строка, столбец): текстура} для подмены
-        тайла пола в конкретных клетках (ловушки); текстура сажается в клетку по
-        её локальным координатам.
-        """
         H = config.VIRT_HEIGHT
         mid = H // 2
         eye = config.EYE_HEIGHT
-        ceil_gap = config.CEILING_HEIGHT - eye  # высота потолка над глазом
+        ceil_gap = config.CEILING_HEIGHT - eye
         tex_n = config.TEX_SIZE
         mh, mw = self.map_h, self.map_w
 
-        # Проекция пола/потолка согласована со стенами (равноугольная): на каждый
-        # столбец берём НАСТОЯЩИЙ единичный луч под тем же углом, что и стены
-        # (pa - FOV + x/W * 2FOV), а дистанцию вдоль луча получаем из
-        # перпендикулярной через 1/cos(theta - pa) - та же коррекция "рыбьего
-        # глаза", что и у стен. Иначе пол/потолок "плывут" относительно стен.
         xs = np.arange(config.VIRT_WIDTH) / config.VIRT_WIDTH
         theta = pa - config.FOV + xs * (2.0 * config.FOV)
         dirx = np.cos(theta)
         diry = np.sin(theta)
-        inv_cos = 1.0 / np.cos(theta - pa)  # perp -> дистанция вдоль луча столбца
+        inv_cos = 1.0 / np.cos(theta - pa)
 
-        # Пол (ниже горизонта). Текстура тайлится РОВНО по клеткам (локальные
-        # координаты клетки), чтобы ловушки точно совпадали с квадратом пола.
-        # Вариант тайла (floor / floor2) выбирается по клетке из _floor_variant.
         floor_a, floor_b = self._floor_texes
         floor_variant = self._floor_variant
         for y in range(mid, H):
-            perp = (eye * H) / (y - mid + 0.0001)  # перпендикулярная дистанция
-            r = perp * inv_cos                     # дистанция вдоль луча столбца
+            perp = (eye * H) / (y - mid + 0.0001)
+            r = perp * inv_cos
             cx = px + r * dirx
             cy = py + r * diry
             ix = cx.astype(int)
             iy = cy.astype(int)
             tx = np.clip(((cx - ix) * tex_n).astype(int), 0, tex_n - 1)
             ty = np.clip(((cy - iy) * tex_n).astype(int), 0, tex_n - 1)
-            # Выбор варианта по клетке (индексы клеток зажаты в границы карты)
+
             sel = floor_variant[np.clip(iy, 0, mh - 1), np.clip(ix, 0, mw - 1)]
             frame[:, y] = np.where(
                 sel[:, None].astype(bool), floor_b[tx, ty], floor_a[tx, ty]
             )
             self.z_buffer[:, y] = perp
 
-            # Подмена тайла пола под ловушками (те же клеточные координаты)
             if floor_tiles:
                 for (cell_r, cell_c), tile_tex in floor_tiles.items():
                     mask = (iy == cell_r) & (ix == cell_c)
                     if mask.any():
                         frame[mask, y] = tile_tex[tx[mask], ty[mask]]
 
-        # Верх: небо (параллакс) или потолок (проекция)
         if self.sky_mode and 'sky' in self.textures:
             self._render_sky(frame, pa)
         else:
-            # Потолок тайлится глобально (как раньше); вариант тайла (ceil /
-            # ceil2) выбирается по клетке из _ceil_variant.
+
             ceil_a, ceil_b = self._ceil_texes
             ceil_variant = self._ceil_variant
             for y in range(0, mid):
@@ -155,11 +115,6 @@ class Renderer:
                 self.z_buffer[:, y] = perp
 
     def _render_sky(self, frame, pa):
-        """
-        Отрисовка неба параллаксом: горизонталь текстуры берётся от угла взгляда
-        (панорамируется при повороте, не зависит от позиции игрока), вертикаль -
-        от строки экрана. Глубина = бесконечность, поэтому стены его перекрывают.
-        """
         sky = self.textures['sky']
         tw, th = sky.shape[0], sky.shape[1]
         H = config.VIRT_HEIGHT
@@ -167,36 +122,26 @@ class Renderer:
 
         cols = np.arange(config.VIRT_WIDTH)
         ray_ang = pa - config.FOV + (cols / config.VIRT_WIDTH) * 2 * config.FOV
-        # Горизонтальная координата текстуры по углу взгляда (тайлится)
+
         frac = (ray_ang / (2 * math.pi) * config.SKY_TILES) % 1.0
         su = (frac * tw).astype(int) % tw
 
         for y in range(0, mid):
             sv = int((y / mid) * th) % th
             frame[:, y] = sky[su, sv]
-            self.z_buffer[:, y] = 99.0  # небо на бесконечности
+            self.z_buffer[:, y] = 99.0
 
     def cast_ray_dda(self, px, py, ray_angle, player_angle):
-        """
-        DDA-алгоритм трассировки луча.
-        :return: (hit_x, hit_y, distance, raw_distance, side) или None
-                 при выходе за границы. distance скорректировано от
-                 "рыбьего глаза" (для высоты стен и z-буфера),
-                 raw_distance — истинное расстояние вдоль луча
-                 (для вычисления точки попадания).
-        """
         rdx, rdy = math.cos(ray_angle), math.sin(ray_angle)
         mx, my = int(px), int(py)
 
-        # Дельты для DDA
         ddx = abs(1 / rdx) if rdx != 0 else 1e30
         ddy = abs(1 / rdy) if rdy != 0 else 1e30
 
-        # Направление шага и начальное расстояние до следующей границы
         sx, step_x = (-1, (px - mx) * ddx) if rdx < 0 else (1, (mx + 1 - px) * ddx)
         sy, step_y = (-1, (py - my) * ddy) if rdy < 0 else (1, (my + 1 - py) * ddy)
 
-        side = 0  # 0 = вертикальная стена, 1 = горизонтальная
+        side = 0
         while True:
             if step_x < step_y:
                 step_x += ddx
@@ -207,23 +152,16 @@ class Renderer:
                 my += sy
                 side = 1
 
-            # Выход за границы карты
             if not (0 <= my < self.map_h and 0 <= mx < self.map_w):
                 return None
 
-            # Попадание в стену
             if self.map[my, mx] > 0:
                 raw_dist = step_x - ddx if side == 0 else step_y - ddy
-                # Коррекция "рыбьего глаза"
+
                 dist = raw_dist * math.cos(ray_angle - player_angle)
                 return mx, my, dist, raw_dist, side
 
     def _draw_wall_band(self, frame, x, top_ideal, bot_ideal, texture, tx, dist):
-        """
-        Рисует один вертикальный пояс стены (тайл 64x64) в столбце x между
-        экранными координатами top_ideal..bot_ideal (float, могут выходить за
-        экран) с попиксельной выборкой текстуры и записью в z-буфер.
-        """
         if texture is None:
             return
         band = bot_ideal - top_ideal
@@ -240,16 +178,6 @@ class Renderer:
         self.z_buffer[x, y0:y1] = dist
 
     def _march_column(self, px, py, ray_angle, player_angle):
-        """
-        Проход лучом по клеткам карты для одного столбца.
-
-        Возвращает список сегментов от ближних к дальним. Сегмент:
-        {perp, raw, tx, full, upper_id, perp_far, [lower_id]}.
-        full=True - сплошная клетка (нижний пояс > 0): рисуется на всю высоту и
-        останавливает луч. full=False - только верхний пояс (перемычка/висящий
-        блок над проходом): рисуется как блок z 1..2 глубиной до perp_far, луч
-        идёт дальше - поэтому дальняя стена сверху остаётся видна ниже блока.
-        """
         rdx, rdy = math.cos(ray_angle), math.sin(ray_angle)
         mx, my = int(px), int(py)
         ddx = abs(1 / rdx) if rdx != 0 else 1e30
@@ -259,7 +187,7 @@ class Renderer:
         cos_corr = math.cos(ray_angle - player_angle)
 
         segments = []
-        pending = None  # сегмент-блок, которому ещё нужна дистанция выхода
+        pending = None
         while True:
             if step_x < step_y:
                 raw = step_x
@@ -275,7 +203,6 @@ class Renderer:
             if not (0 <= my < self.map_h and 0 <= mx < self.map_w):
                 break
 
-            # Текущая граница = выход из предыдущей клетки-блока
             if pending is not None:
                 pending["perp_far"] = raw * cos_corr
                 pending = None
@@ -283,16 +210,16 @@ class Renderer:
             lower = int(self.map[my, mx])
             upper = int(self.upper_map[my, mx])
             if lower <= 0 and upper <= 0:
-                continue  # полностью открытая клетка - луч идёт дальше
+                continue
 
-            perp = raw * cos_corr  # перпендикулярная дистанция (как в z-буфере)
+            perp = raw * cos_corr
             if side == 0:
                 wall_hit = py + raw * rdy
             else:
                 wall_hit = px + raw * rdx
             tx = int((wall_hit % 1) * config.TEX_SIZE)
 
-            if lower > 0:  # сплошная стена на всю высоту - останавливает луч
+            if lower > 0:
                 segments.append({
                     "perp": perp, "raw": raw, "tx": tx, "full": True,
                     "lower_id": lower, "upper_id": upper if upper > 0 else lower,
@@ -300,7 +227,6 @@ class Renderer:
                 })
                 break
 
-            # только верхний пояс (перемычка/висящий блок) - луч идёт дальше
             seg = {"perp": perp, "raw": raw, "tx": tx, "full": False,
                    "upper_id": upper, "perp_far": perp}
             segments.append(seg)
@@ -309,17 +235,6 @@ class Renderer:
         return segments
 
     def render_walls(self, frame, px, py, pa):
-        """
-        Отрисовка стен рейкастингом в два пояса по высоте.
-
-        Для каждого столбца _march_column собирает сегменты (перемычки/блоки
-        верхнего пояса + завершающая сплошная стена). Сегменты рисуются от
-        дальних к ближним (алгоритм художника): сплошная стена - оба пояса;
-        перемычка/блок - верхний пояс как блок z 1..2 глубиной до perp_far
-        (передняя грань + низ), поэтому снизу он не просвечивает, а дальняя
-        стена сверху остаётся видна ниже блока. Экранная координата мировой
-        высоты z: mid + (EYE_HEIGHT - z) * L, где L - пикселей на юнит.
-        """
         mid = config.VIRT_HEIGHT // 2
         eye = config.EYE_HEIGHT
         hit_info = None
@@ -329,7 +244,7 @@ class Renderer:
             rdx, rdy = math.cos(ray_angle), math.sin(ray_angle)
             segments = self._march_column(px, py, ray_angle, pa)
 
-            for seg in reversed(segments):  # дальние -> ближние
+            for seg in reversed(segments):
                 d = seg["perp"]
                 unit = config.VIRT_HEIGHT / (d + 0.0001)
                 y_floor = mid + (eye - 0.0) * unit
@@ -337,18 +252,16 @@ class Renderer:
                 y_ceil = mid + (eye - 2.0) * unit
                 upper_tex = self.textures.get(seg["upper_id"])
 
-                # верхний пояс (z 1..2), передняя грань на ближней дистанции
                 self._draw_wall_band(frame, x, y_ceil, y_seam, upper_tex,
                                      seg["tx"], d)
 
                 if seg["full"]:
-                    # нижний пояс (z 0..1)
+
                     self._draw_wall_band(frame, x, y_seam, y_floor,
                                          self.textures.get(seg["lower_id"]),
                                          seg["tx"], d)
                 else:
-                    # низ блока: до z=1 у дальней грани клетки (не просвечивает).
-                    # Рисуется текстурой потолка - низ блока это "потолок" прохода
+
                     d_far = seg["perp_far"]
                     if d_far > d:
                         unit_far = config.VIRT_HEIGHT / (d_far + 0.0001)
@@ -357,7 +270,6 @@ class Renderer:
                                              self.textures.get('ceil'),
                                              seg["tx"], d_far)
 
-            # Точка попадания в центр экрана (для искр) - ближайшая сплошная стена
             if x == config.VIRT_WIDTH // 2 and segments and segments[-1]["full"]:
                 seg = segments[-1]
                 hit_info = (px + seg["raw"] * rdx, py + seg["raw"] * rdy,
@@ -366,25 +278,13 @@ class Renderer:
         return hit_info
 
     def render_sprites(self, frame, px, py, pa, objects, highlighted=None):
-        """
-        Отрисовка интерактивных объектов как плоских ориентированных
-        поверхностей (не билбордов), неподвижных в пространстве.
-
-        Для каждого экранного столбца луч (тот же, что у стен) пересекается
-        с отрезком объекта - это даёт корректную перспективу и перекрытие
-        через общий z-буфер. Вызывается между стенами и пост-обработкой,
-        чтобы объекты попадали под те же эффекты, что и мир. Отрисованные
-        пиксели пишутся в z-буфер, поэтому объекты и частицы за ними
-        корректно отсекаются (в т. ч. один объект за другим).
-        """
         mid = config.VIRT_HEIGHT // 2
 
-        # Лучи столбцов (совпадают с рейкастингом стен), считаются один раз
         cols = np.arange(config.VIRT_WIDTH)
         ray_ang = pa - config.FOV + (cols / config.VIRT_WIDTH) * 2 * config.FOV
         rdx = np.cos(ray_ang)
         rdy = np.sin(ray_ang)
-        cos_corr = np.cos(ray_ang - pa)  # поправка "рыбьего глаза"
+        cos_corr = np.cos(ray_ang - pa)
 
         for obj in objects:
             is_high = obj is highlighted
@@ -396,27 +296,23 @@ class Renderer:
                 mult = config.HIGHLIGHT_BRIGHTNESS if is_high else 1.0
             tex_w, tex_h = sprite.shape[0], sprite.shape[1]
 
-            # Концы отрезка поверхности в мировых координатах. Направление
-            # касательной: билборд - "право" камеры (плоскость параллельна экрану,
-            # лицом к игроку); иначе - фиксированный угол объекта.
             half = obj.width / 2.0
             if getattr(obj, "billboard", False):
                 tx, ty = -math.sin(pa), math.cos(pa)
             else:
                 tx, ty = math.cos(obj.angle), math.sin(obj.angle)
-            ax, ay = obj.x - half * tx, obj.y - half * ty  # точка A
-            ex, ey = obj.width * tx, obj.width * ty          # вектор A->B
+            ax, ay = obj.x - half * tx, obj.y - half * ty
+            ex, ey = obj.width * tx, obj.width * ty
 
-            # Пересечение луча (P + t*R) с отрезком (A + s*E) сразу для всех столбцов
             apx, apy = ax - px, ay - py
             det = ex * rdy - ey * rdx
             safe = np.abs(det) > 1e-9
             det_safe = np.where(safe, det, 1.0)
-            t = (-apx * ey + ex * apy) / det_safe          # дистанция вдоль луча
-            s = (rdx * apy - rdy * apx) / det_safe          # параметр вдоль отрезка
+            t = (-apx * ey + ex * apy) / det_safe
+            s = (rdx * apy - rdy * apx) / det_safe
             hit = safe & (t > 0) & (s >= 0.0) & (s <= 1.0)
 
-            perp_all = t * cos_corr  # перпендикулярная дистанция (как в z-буфере)
+            perp_all = t * cos_corr
             hit &= perp_all > config.SPRITE_NEAR_CLIP
 
             for col in np.nonzero(hit)[0]:
@@ -435,11 +331,11 @@ class Renderer:
                 rows = np.arange(y0, y1)
                 v_idx = np.clip(((rows - top) / pixel_h * tex_h).astype(int),
                                 0, tex_h - 1)
-                texel = sprite[u, v_idx]  # (bh, 4)
+                texel = sprite[u, v_idx]
 
                 z_col = self.z_buffer[col, y0:y1]
                 alpha = texel[:, 3] / 255.0
-                # рисуем там, где есть непрозрачность и объект ближе стены
+
                 vis = (alpha > 0.03) & (perp < z_col)
                 if not vis.any():
                     continue
@@ -448,38 +344,26 @@ class Renderer:
                 if mult != 1.0:
                     rgb = np.clip(rgb * mult, 0, 255)
 
-                # Альфа-смешивание с уже отрисованным фоном (полупрозрачность)
                 frame_col = frame[col, y0:y1, :]
                 a = alpha[vis][:, np.newaxis]
                 frame_col[vis] = rgb[vis] * a + frame_col[vis] * (1.0 - a)
 
-                # В z-буфер пишем только достаточно непрозрачные пиксели, чтобы
-                # полупрозрачные (свечение) не перекрывали глубину за собой
                 opaque = vis & (alpha > 0.5)
                 z_col[opaque] = perp
 
     def apply_post_processing(self, frame, focus, brightness, saturation_mult):
-        """
-        Пост-обработка: виньетка, глубина резкости, насыщенность.
-        :return: frame как uint8 для отрисовки
-        """
-        # Квадрат радиуса от центра - кешированная константа (см. __init__)
+
         r2 = self._r2
 
-        # Виньетка + затенение по глубине
         radial = np.exp(-focus * r2)
         depth_mask = np.exp(-config.DEPTH_FALLOFF * self.z_buffer)
         light_mask = radial * depth_mask * brightness
 
-        # Насыщенность: центр — цветной, края — ч/б
         sat_map = np.clip(
             np.exp(-(focus / 15.0) * r2) + (1.0 - (focus - 12) / 250.0),
             0, 1
         )[..., np.newaxis]
 
-        # Композиция цвета: ч/б подмешивается только там, где sat_map < 1.
-        # Когда насыщенность всюду ~1 (обычный режим, не "сварка") - пропускаем
-        # расчёт ч/б целиком.
         if sat_map.min() >= 0.999:
             blended = frame
         else:
@@ -491,13 +375,11 @@ class Renderer:
         return result.astype(np.uint8)
 
     def draw_god_rays(self, surface, rays_intensity, center=None):
-        """Отрисовка процедурных god rays на поверхности с альфа-каналом."""
         if rays_intensity < 0.05:
-            # Когда интенсивность падает, поверхность всё равно нужно очищать
+
             surface.fill((0, 0, 0, 0))
             return
 
-        # ВАЖНО: очищаем слой каждый кадр, иначе лучи остаются навсегда
         surface.fill((0, 0, 0, 0))
 
         if center is None:

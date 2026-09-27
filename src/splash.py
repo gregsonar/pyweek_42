@@ -1,6 +1,3 @@
-# src/splash.py
-"""Сплеш-заставка при запуске: лого/заголовок с фейдами, затем главное меню."""
-
 import pygame as pg
 
 from . import config
@@ -9,9 +6,7 @@ from .i18n import tr
 from .menu import MainMenuScene
 from .scene import Scene
 
-
 class SplashScene(Scene):
-    """Заставка: появление -> показ -> угасание -> меню. Скип любой клавишей/кликом."""
 
     wants_mouse_grab = False
 
@@ -26,14 +21,12 @@ class SplashScene(Scene):
         )
 
     def _load_logo(self):
-        """Загрузить лого, если файл есть; иначе None (покажем текст-заглушку)."""
         try:
             return pg.image.load(config.SPLASH_LOGO_PATH).convert_alpha()
         except (pg.error, FileNotFoundError, OSError):
             return None
 
     def _alpha(self):
-        """Прозрачность 0..1 по фазе фейдов."""
         fi, hold, fo = (
             config.SPLASH_FADE_IN,
             config.SPLASH_HOLD,

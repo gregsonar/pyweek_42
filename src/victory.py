@@ -1,6 +1,3 @@
-# src/victory.py
-"""Экран завершения уровня/игры."""
-
 import pygame as pg
 
 from . import config
@@ -9,9 +6,7 @@ from .i18n import tr
 from .scene import Scene
 from .ui import Menu, MenuItem
 
-
 class VictoryScene(Scene):
-    """Поздравление с прохождением + переход в меню или к титрам."""
 
     wants_mouse_grab = False
 

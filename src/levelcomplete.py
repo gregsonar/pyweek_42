@@ -1,6 +1,3 @@
-# src/levelcomplete.py
-"""Межуровневый экран: уровень пройден, время добега и кнопка «Дальше»."""
-
 import pygame as pg
 
 from . import config
@@ -9,9 +6,7 @@ from .i18n import tr
 from .scene import Scene
 from .ui import Menu, MenuItem
 
-
 class LevelCompleteScene(Scene):
-    """Сообщение о прохождении уровня + время + переход на следующий уровень."""
 
     wants_mouse_grab = False
 
@@ -27,7 +22,6 @@ class LevelCompleteScene(Scene):
         )
 
     def _next(self):
-        """Перейти на следующий уровень (с фейдом)."""
         from .main import GameplayScene
 
         self.app.fade_to(GameplayScene(self.app, self.next_index))

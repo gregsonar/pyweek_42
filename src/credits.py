@@ -1,6 +1,3 @@
-# src/credits.py
-"""Экран титров/атрибуций."""
-
 import pygame as pg
 
 from . import config
@@ -9,8 +6,6 @@ from .i18n import tr
 from .scene import Scene
 from .ui import Menu, MenuItem
 
-# Строки титров. Проприетарные имена не локализуем. Дополнить реальными
-# авторами графики/звука перед релизом (см. TODO по атрибуциям в notes.md).
 CREDITS_LINES = [
     "ChronoKhryshch",
     "---",
@@ -34,9 +29,7 @@ CREDITS_LINES = [
     "Made with love!",
 ]
 
-
 class CreditsScene(Scene):
-    """Полноэкранные титры: заголовок, список строк, кнопка 'Назад'."""
 
     wants_mouse_grab = False
 
@@ -69,12 +62,9 @@ class CreditsScene(Scene):
         screen.blit(shadow, trect.move(3, 3))
         screen.blit(title, trect)
 
-        # Полоса под строки: от заголовка до места кнопки "Назад" внизу. Шаг
-        # (unit) подгоняется под доступную высоту, поэтому список любой длины
-        # уместится. Пустые строки - разделители в половину шага.
         max_w = w - 2 * config.HUD_MARGIN
         content_top = trect.bottom + 20
-        back_reserve = self.line_font.get_height() + 48  # место под кнопку снизу
+        back_reserve = self.line_font.get_height() + 48
         avail = max(1, (h - back_reserve) - content_top)
         weight = sum(1.0 if line else 0.45 for line in CREDITS_LINES)
         unit = avail / weight if weight else avail
@@ -84,7 +74,7 @@ class CreditsScene(Scene):
             if line:
                 surf = self.line_font.render(line, True, config.MENU_COLOR)
                 sw, sh = surf.get_size()
-                # ужать строку, если шире полосы или выше ячейки (устойчиво к росту)
+
                 scale = min(1.0, max_w / sw, (unit * 0.9) / sh)
                 if scale < 1.0:
                     surf = pg.transform.smoothscale(

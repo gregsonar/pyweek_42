@@ -1,34 +1,22 @@
-# src/scene.py
-"""Базовый класс экрана (сцены). Стеком сцен управляет App (src/app.py)."""
-
-
 class Scene:
-    """
-    Экран/состояние игры (сплеш, меню, игра, пауза...).
 
-    App хранит стек сцен и каждый кадр зовёт у верхней сцены handle_events ->
-    update -> draw. Оверлеи (например, пауза) ставят render_below=True, чтобы под
-    ними отрисовалась сцена ниже. wants_mouse_grab включает захват мыши и прячет
-    курсор (для игры - да, для меню - нет).
-    """
-
-    wants_mouse_grab = False  # захватывать мышь и прятать курсор
-    render_below = False  # рисовать ли сцену под этой (для оверлеев)
+    wants_mouse_grab = False
+    render_below = False
 
     def __init__(self, app):
         self.app = app
 
     def on_enter(self):
-        """Сцена попала на вершину стека (стала активной)."""
+        pass
 
     def on_exit(self):
-        """Сцена снята со стека."""
+        pass
 
     def handle_events(self, events):
-        """Обработать дискретные события кадра (список событий pygame)."""
+        pass
 
     def update(self, dt):
-        """Обновить логику сцены. dt - время кадра в секундах."""
+        pass
 
     def draw(self, screen):
-        """Отрисовать сцену на screen. Без flip - им занимается App."""
+        pass

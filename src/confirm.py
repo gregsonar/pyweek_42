@@ -1,6 +1,3 @@
-# src/confirm.py
-"""Универсальный диалог подтверждения (да/нет) как оверлей."""
-
 import pygame as pg
 
 from . import config
@@ -9,12 +6,7 @@ from .i18n import tr
 from .scene import Scene
 from .ui import Menu, MenuItem
 
-
 class ConfirmScene(Scene):
-    """Оверлей с вопросом и выбором Нет/Да. По умолчанию выбран Нет (безопасно).
-
-    on_yes вызывается после снятия диалога, если игрок подтвердил.
-    """
 
     render_below = True
     wants_mouse_grab = False
@@ -38,7 +30,7 @@ class ConfirmScene(Scene):
         self.app.pop_scene()
 
     def _yes(self):
-        self.app.pop_scene()  # снять диалог
+        self.app.pop_scene()
         self._on_yes()
 
     def handle_events(self, events):
