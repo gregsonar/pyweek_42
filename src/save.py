@@ -1,0 +1,55 @@
+import json
+import os
+import sys
+
+_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+SAVE_PATH = os.path.join(_ROOT, "save.json")
+
+_DEFAULT = {"language": None, "progress": None, "music_on": None, "sfx_on": None}
+
+class SaveData:
+
+    def __init__(self, data=None):
+        base = dict(_DEFAULT)
+        if isinstance(data, dict):
+            base.update(data)
+        self.language = base.get("language")
+        prog = base.get("progress")
+        self.progress_level = prog.get("level") if isinstance(prog, dict) else None
+        self.music_on = base.get("music_on")
+        self.sfx_on = base.get("sfx_on")
+
+    def has_progress(self):
+        return self.progress_level is not None
+
+    def set_progress(self, level):
+        self.progress_level = level
+
+    def reset_progress(self):
+        self.progress_level = None
+
+    def to_dict(self):
+        return {
+            "language": self.language,
+            "progress": (
+                {"level": self.progress_level}
+                if self.progress_level is not None
+                else None
+            ),
+            "music_on": self.music_on,
+            "sfx_on": self.sfx_on,
+        }
+
+def load():
+    try:
+        with open(SAVE_PATH, "r", encoding="utf-8") as fh:
+            return SaveData(json.load(fh))
+    except (OSError, ValueError):
+        return SaveData()
+
+def persist(data):
+    try:
+        with open(SAVE_PATH, "w", encoding="utf-8") as fh:
+            json.dump(data.to_dict(), fh, ensure_ascii=False, indent=2)
+    except OSError as exc:
+        print("save failed: %s" % exc, file=sys.stderr, flush=True)
