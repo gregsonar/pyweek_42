@@ -178,8 +178,3 @@ for_artist/
 preview_out/
 twolevel_out/
 preview.py
-
-# Assets
-assets/textures/**
-!assets/textures/**/
-!assets/textures/**/.gitkeep
