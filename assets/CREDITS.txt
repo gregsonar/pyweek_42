@@ -1,4 +1,7 @@
 Sounds:
+
+intro.wav - https://sfbgames.itch.io/chiptone
+
 buzz.wav - long, drawn out arcing (several seconds) from high voltage neon transformer by Jon5515 -- https://freesound.org/s/871582/ -- License: Attribution 4.0
 
 hurt.wav - SYS_glitched_undo by MirMaximus -- https://freesound.org/s/864200/ -- License: Creative Commons 0
@@ -6,3 +9,9 @@ hurt.wav - SYS_glitched_undo by MirMaximus -- https://freesound.org/s/864200/ --
 death.wav - Hit reverb (dark) by xkeril -- https://freesound.org/s/701308/ -- License: Creative Commons 0
 
 freeze.wav and unfreeze wav - Escape - Rpg by colorsCrimsonTears -- https://freesound.org/s/562293/ -- License: Creative Commons 0
+
+ui_move.wav - Step2 by EvaMusik -- https://freesound.org/s/832741/ -- License: Creative Commons 0
+
+intro.wav - https://sfbgames.itch.io/chiptone 
+
+sonic_drive_fast.wav and sonic_drive_slow.wav - SONIC DIVE by Ant.Survila feat Vidian http://dig.ccmixter.org/files/AntSurvila/69842
