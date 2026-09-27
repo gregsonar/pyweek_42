@@ -1,8 +1,8 @@
-# [PyWeek 42] game by Knotty Kaa
+# [PyWeek 42] ChronoKhryshch game by Knotty Kaa
 
 [Knotty Kaa entry](https://pyweek.org/e/KnottyKaa42/)
 
-> Work in progress
+> September 2026: "Borrowed Time" challenge is finished
 
 ### Also:
 
