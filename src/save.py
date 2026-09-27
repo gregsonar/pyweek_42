@@ -2,7 +2,10 @@ import json
 import os
 import sys
 
-_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+if getattr(sys, "frozen", False):
+    _ROOT = os.path.dirname(sys.executable)
+else:
+    _ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 SAVE_PATH = os.path.join(_ROOT, "save.json")
 
 _DEFAULT = {"language": None, "progress": None, "music_on": None, "sfx_on": None}
