@@ -19,9 +19,21 @@ cp -r "$REPO_ROOT/src"    "$BUILD_DIR/src"
 cp -r "$REPO_ROOT/assets" "$BUILD_DIR/assets"
 cp    "$REPO_ROOT/web/main.py" "$BUILD_DIR/main.py"
 
+# Веб-версия использует .ogg (pygame в pygbag не умеет .wav). Конвертируем ЛОКАЛЬНО
+# в сборочную директорию и удаляем .wav, чтобы в пакет попал только .ogg.
+# Медиа в репозиторий не коммитим — это делается только перед релизом.
+if ! command -v ffmpeg >/dev/null 2>&1; then
+  echo "!! ffmpeg не найден в PATH — установи его и повтори (нужен для .wav->.ogg)" >&2
+  exit 1
+fi
+echo ">> конвертирую звук .wav -> .ogg"
+for wav in "$BUILD_DIR"/assets/sounds/*.wav; do
+  [ -e "$wav" ] || continue
+  ffmpeg -y -loglevel error -i "$wav" -c:a libvorbis -q:a 5 "${wav%.wav}.ogg"
+  rm -f "$wav"
+done
+
 python -m pip install --quiet --upgrade pygbag
 echo ">> запускаю pygbag на http://localhost:8000 (Ctrl+C для остановки)"
 cd "$BUILD_DIR"
-# --disable-sound-format-error: для PoC оставляем .wav как есть (звук для замера
-# FPS не нужен). В Фазе 1 звук будет переведён в .ogg и флаг не понадобится.
-exec python -m pygbag --port 8000 --disable-sound-format-error main.py
+exec python -m pygbag --port 8000 main.py

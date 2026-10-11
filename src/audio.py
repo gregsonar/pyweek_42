@@ -8,6 +8,16 @@ from . import config
 _SOUNDS_DIR = "assets/sounds"
 _MUSIC_DIR = "assets/sounds"
 
+# В вебе (pygbag/emscripten) pygame не умеет .wav — ассеты там в .ogg.
+# На десктопе остаётся исходный формат, поэтому поведение не меняется.
+_WEB = sys.platform == "emscripten"
+
+
+def _audio_path(fname):
+    if _WEB and fname.lower().endswith(".wav"):
+        fname = fname[:-4] + ".ogg"
+    return os.path.join(_SOUNDS_DIR, fname)
+
 SOUND_FILES = {
     "intro": "intro.wav",
     "ui_move": "ui_move.wav",
@@ -43,7 +53,7 @@ class SoundManager:
 
     def _load(self):
         for name, fname in SOUND_FILES.items():
-            path = os.path.join(_SOUNDS_DIR, fname)
+            path = _audio_path(fname)
             if not os.path.exists(path):
                 continue
             try:
@@ -90,7 +100,7 @@ class SoundManager:
         if not filename or not self._music_on:
             self.stop_music()
             return
-        path = os.path.join(_MUSIC_DIR, filename)
+        path = _audio_path(filename)
         if not os.path.exists(path):
             self.stop_music()
             return
