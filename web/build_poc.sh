@@ -22,4 +22,6 @@ cp    "$REPO_ROOT/web/main.py" "$BUILD_DIR/main.py"
 python -m pip install --quiet --upgrade pygbag
 echo ">> запускаю pygbag на http://localhost:8000 (Ctrl+C для остановки)"
 cd "$BUILD_DIR"
-exec python -m pygbag --port 8000 main.py
+# --disable-sound-format-error: для PoC оставляем .wav как есть (звук для замера
+# FPS не нужен). В Фазе 1 звук будет переведён в .ogg и флаг не понадобится.
+exec python -m pygbag --port 8000 --disable-sound-format-error main.py
