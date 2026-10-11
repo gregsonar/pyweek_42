@@ -2,33 +2,57 @@
 
 Boots directly into a gameplay level to measure the raycaster in WASM.
 This is a throwaway harness for Phase 0 (PoC), not the production entry.
+
+All diagnostics go to the browser DevTools console (via pygbag's JS bridge)
+AND to stdout, so the result is visible regardless of where output lands.
 """
 import asyncio
+import sys
 import time
+import traceback
 
-import pygame as pg
 
-from src import audio, config
-from src.app import App
+def jslog(msg):
+    """Log to the browser DevTools console if possible, and to stdout."""
+    try:
+        import platform  # pygbag injects .window into the stdlib module
+        platform.window.console.log("[POC] " + str(msg))
+    except Exception:
+        pass
+    print(msg, flush=True)
 
 
 async def main():
-    app = App()
+    jslog("POC_BOOT_OK: main() started")
 
-    # Boot straight into gameplay level 0 to exercise the raycaster.
+    import pygame as pg
+    jslog("POC_STEP: pygame imported")
+
+    try:
+        import numpy as np  # noqa: F401
+        jslog("POC_STEP: numpy imported OK, version " + np.__version__)
+    except Exception as exc:
+        jslog("POC_FATAL numpy import failed: %r" % exc)
+        raise
+
+    from src import audio, config
+    from src.app import App
+    jslog("POC_STEP: game modules imported")
+
+    app = App()
+    jslog("POC_STEP: App() constructed")
+
     from src.main import GameplayScene
     app.push_scene(GameplayScene(app, level_index=0))
+    jslog("POC_STEP: GameplayScene pushed, entering loop")
 
     frames = 0
     window = 0
     t_window = time.perf_counter()
     fps_samples = []
-    MAX_FRAMES = 600  # ~ a few seconds of rendering, then stop
-
-    print("POC_BOOT_OK", flush=True)
+    MAX_FRAMES = 600
 
     while app.running and app._scenes and frames < MAX_FRAMES:
-        # No FPS cap: measure the true max render throughput in WASM.
         dt = min(app.clock.tick() / 1000.0, config.MAX_DT)
 
         events = pg.event.get()
@@ -36,7 +60,6 @@ async def main():
             if event.type == pg.QUIT:
                 app.running = False
 
-        # Nudge the view so we never measure a degenerate static frame.
         scene = app.scene
         if scene is not None and hasattr(scene, "player"):
             scene.player["angle"] += 0.03
@@ -58,10 +81,9 @@ async def main():
         if window >= 30:
             now = time.perf_counter()
             fps = window / (now - t_window)
-            # ignore the first window (includes JIT / asset warmup)
             if frames > 30:
                 fps_samples.append(fps)
-            print("POC_FPS %.2f (frame %d)" % (fps, frames), flush=True)
+            jslog("POC_FPS %.2f (frame %d)" % (fps, frames))
             window = 0
             t_window = now
 
@@ -69,12 +91,18 @@ async def main():
 
     if fps_samples:
         avg = sum(fps_samples) / len(fps_samples)
-        lo = min(fps_samples)
-        hi = max(fps_samples)
-        print("POC_RESULT avg=%.2f min=%.2f max=%.2f windows=%d"
-              % (avg, lo, hi, len(fps_samples)), flush=True)
-    print("POC_DONE", flush=True)
+        jslog("POC_RESULT avg=%.2f min=%.2f max=%.2f windows=%d"
+              % (avg, min(fps_samples), max(fps_samples), len(fps_samples)))
+    jslog("POC_DONE")
     pg.quit()
 
 
-asyncio.run(main())
+async def _guarded():
+    try:
+        await main()
+    except Exception:
+        jslog("POC_TRACEBACK:\n" + traceback.format_exc())
+        raise
+
+
+asyncio.run(_guarded())
