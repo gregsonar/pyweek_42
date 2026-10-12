@@ -118,27 +118,40 @@ class App:
 
         pg.mouse.get_rel()
 
+    def _tick(self, dt):
+        events = pg.event.get()
+        for event in events:
+            if event.type == pg.QUIT:
+                self.running = False
+
+        fading = self._fade is not None
+        scene = self.scene
+        if scene is not None and not fading:
+            scene.handle_events(events)
+
+        if self.scene is not None:
+            self.scene.update(dt)
+        if self._fade is not None:
+            self._advance_fade(dt)
+        self._draw()
+        if self._fade is not None:
+            self._draw_fade()
+        pg.display.flip()
+
     def run(self):
         while self.running and self._scenes:
             dt = min(self.clock.tick(config.FPS) / 1000.0, config.MAX_DT)
-            events = pg.event.get()
-            for event in events:
-                if event.type == pg.QUIT:
-                    self.running = False
+            self._tick(dt)
+        pg.quit()
 
-            fading = self._fade is not None
-            scene = self.scene
-            if scene is not None and not fading:
-                scene.handle_events(events)
-
-            if self.scene is not None:
-                self.scene.update(dt)
-            if self._fade is not None:
-                self._advance_fade(dt)
-            self._draw()
-            if self._fade is not None:
-                self._draw_fade()
-            pg.display.flip()
+    async def run_async(self):
+        # Веб-версия (pygbag): тот же цикл, но с передачей управления браузеру
+        # после каждого кадра. Десктоп использует блокирующий run().
+        import asyncio
+        while self.running and self._scenes:
+            dt = min(self.clock.tick(config.FPS) / 1000.0, config.MAX_DT)
+            self._tick(dt)
+            await asyncio.sleep(0)
         pg.quit()
 
     def _draw(self):

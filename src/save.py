@@ -2,6 +2,12 @@ import json
 import os
 import sys
 
+# В вебе (pygbag/emscripten) файловая система в памяти (MEMFS) не переживает
+# перезагрузку страницы. Сейв крошечный (язык, уровень, 2 флага звука), поэтому
+# храним его в localStorage браузера. На десктопе — по-прежнему файл save.json.
+_WEB = sys.platform == "emscripten"
+_LS_KEY = "chronokhryshch_save"
+
 if getattr(sys, "frozen", False):
     _ROOT = os.path.dirname(sys.executable)
 else:
@@ -43,16 +49,42 @@ class SaveData:
             "sfx_on": self.sfx_on,
         }
 
-def load():
+def _read_raw():
+    if _WEB:
+        try:
+            import platform
+            raw = platform.window.localStorage.getItem(_LS_KEY)
+            return str(raw) if raw else None
+        except Exception:
+            return None
     try:
         with open(SAVE_PATH, "r", encoding="utf-8") as fh:
-            return SaveData(json.load(fh))
-    except (OSError, ValueError):
-        return SaveData()
+            return fh.read()
+    except OSError:
+        return None
 
-def persist(data):
+def _write_raw(text):
+    if _WEB:
+        try:
+            import platform
+            platform.window.localStorage.setItem(_LS_KEY, text)
+        except Exception as exc:
+            print("save failed (web): %s" % exc, file=sys.stderr, flush=True)
+        return
     try:
         with open(SAVE_PATH, "w", encoding="utf-8") as fh:
-            json.dump(data.to_dict(), fh, ensure_ascii=False, indent=2)
+            fh.write(text)
     except OSError as exc:
         print("save failed: %s" % exc, file=sys.stderr, flush=True)
+
+def load():
+    raw = _read_raw()
+    if raw:
+        try:
+            return SaveData(json.loads(raw))
+        except ValueError:
+            pass
+    return SaveData()
+
+def persist(data):
+    _write_raw(json.dumps(data.to_dict(), ensure_ascii=False, indent=2))

@@ -11,6 +11,16 @@ import sys
 import time
 import traceback
 
+# ВАЖНО (веб/pygbag): numpy импортируем ДО pygame. pygbag грузит .so-wheel'ы в
+# порядке обнаружения импортов. В emscripten SDL слинкован в несколько .so, и
+# из-за дублирования символов "побеждает" загруженный последним. Если numpy
+# подгружается ПОСЛЕ pygame, он затирает регистрацию SDL-дисплея, и первый же
+# set_mode падает: "The video driver did not add any displays" (num_displays=0).
+# numpy раньше pygame -> pygame слинкован последним, дисплей сохраняется.
+# На десктопе порядок импорта безразличен — поведение не меняется.
+import numpy as np  # noqa: E402,F401  (must precede pygame on web)
+import pygame as pg  # noqa: E402
+
 
 def jslog(msg):
     """Log to the browser DevTools console if possible, and to stdout."""
@@ -24,25 +34,18 @@ def jslog(msg):
 
 async def main():
     jslog("POC_BOOT_OK: main() started")
+    jslog("POC_STEP: pygame " + pg.version.ver + ", numpy " + np.__version__
+          + ", platform=" + sys.platform)
 
-    import pygame as pg
-    jslog("POC_STEP: pygame imported")
-
-    try:
-        import numpy as np  # noqa: F401
-        jslog("POC_STEP: numpy imported OK, version " + np.__version__)
-    except Exception as exc:
-        jslog("POC_FATAL numpy import failed: %r" % exc)
-        raise
-
-    from src import audio, config
+    from src import config
     from src.app import App
+    from src.main import GameplayScene
     jslog("POC_STEP: game modules imported")
 
     app = App()
-    jslog("POC_STEP: App() constructed")
+    jslog("POC_STEP: App() constructed, displays=%d"
+          % pg.display.get_num_displays())
 
-    from src.main import GameplayScene
     app.push_scene(GameplayScene(app, level_index=0))
     jslog("POC_STEP: GameplayScene pushed, entering loop")
 
